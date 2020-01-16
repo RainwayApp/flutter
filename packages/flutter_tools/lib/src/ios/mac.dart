@@ -259,7 +259,7 @@ class IMobileDevice {
 }
 
 Future<XcodeBuildResult> buildXcodeProject({
-  BuildableIOSApp app,
+  BuildableIOSLikeApp app,
   BuildInfo buildInfo,
   String targetOverride,
   bool buildForDevice,

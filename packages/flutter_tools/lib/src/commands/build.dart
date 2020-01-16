@@ -16,6 +16,7 @@ import 'build_appbundle.dart';
 import 'build_bundle.dart';
 import 'build_fuchsia.dart';
 import 'build_ios.dart';
+import 'build_tvos.dart';
 import 'build_ios_framework.dart';
 import 'build_web.dart';
 
@@ -26,6 +27,7 @@ class BuildCommand extends FlutterCommand {
     addSubcommand(BuildAppBundleCommand(verboseHelp: verboseHelp));
     addSubcommand(BuildAotCommand(verboseHelp: verboseHelp));
     addSubcommand(BuildIOSCommand());
+    addSubcommand(BuildTvOSCommand());
     addSubcommand(BuildIOSFrameworkCommand());
     addSubcommand(BuildBundleCommand(verboseHelp: verboseHelp));
     addSubcommand(BuildWebCommand());
@@ -39,7 +41,7 @@ class BuildCommand extends FlutterCommand {
   final String name = 'build';
 
   @override
-  final String description = 'Flutter build commands.';
+  final String description = 'Flutter build commaaaands.';
 
   @override
   Future<FlutterCommandResult> runCommand() async => null;

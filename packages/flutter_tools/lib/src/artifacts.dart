@@ -203,6 +203,8 @@ class CachedArtifacts extends Artifacts {
         return _getAndroidArtifactPath(artifact, platform, mode);
       case TargetPlatform.ios:
         return _getIosArtifactPath(artifact, platform, mode);
+      case TargetPlatform.tvos:
+        return _getTvosArtifactPath(artifact, platform, mode);
       case TargetPlatform.darwin_x64:
         return _getDarwinArtifactPath(artifact, platform, mode);
       case TargetPlatform.fuchsia_arm64:
@@ -306,6 +308,10 @@ class CachedArtifacts extends Artifacts {
     }
   }
 
+  String _getTvosArtifactPath(Artifact artifact, TargetPlatform platform, BuildMode mode) {
+    return _getIosArtifactPath(artifact, platform, mode);
+  }
+
   String _getFlutterPatchedSdkPath(BuildMode mode) {
     final String engineArtifactsPath = _cache.getArtifactDirectory('engine').path;
     return _fileSystem.path.join(engineArtifactsPath, 'common',
@@ -394,6 +400,7 @@ class CachedArtifacts extends Artifacts {
         assert(mode == null, 'Platform $platform does not support different build modes.');
         return _fileSystem.path.join(engineDir, platformName);
       case TargetPlatform.ios:
+      case TargetPlatform.tvos:
       case TargetPlatform.android_arm:
       case TargetPlatform.android_arm64:
       case TargetPlatform.android_x64:
