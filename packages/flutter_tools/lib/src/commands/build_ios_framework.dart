@@ -146,7 +146,7 @@ class BuildIOSFrameworkCommand extends BuildSubCommand {
       throwToolExit('--output is required.');
     }
 
-    final BuildableIOSApp iosProject = await applicationPackages.getPackageForPlatform(TargetPlatform.ios) as BuildableIOSApp;
+    final BuildableIOSLikeApp iosProject = await applicationPackages.getPackageForPlatform(TargetPlatform.ios) as BuildableIOSLikeApp;
 
     if (iosProject == null) {
       throwToolExit("Module's iOS folder missing");

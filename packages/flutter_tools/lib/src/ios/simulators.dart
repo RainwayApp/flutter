@@ -287,9 +287,9 @@ class IOSSimulator extends Device {
   Future<bool> isLatestBuildInstalled(ApplicationPackage app) async => false;
 
   @override
-  Future<bool> installApp(covariant IOSApp app) async {
+  Future<bool> installApp(covariant IOSLikeApp app) async {
     try {
-      final IOSApp iosApp = app;
+      final IOSLikeApp iosApp = app;
       await SimControl.instance.install(id, iosApp.simulatorBundlePath);
       return true;
     } catch (e) {
@@ -337,7 +337,7 @@ class IOSSimulator extends Device {
 
   @override
   Future<LaunchResult> startApp(
-    covariant IOSApp package, {
+    covariant IOSLikeApp package, {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
@@ -345,7 +345,7 @@ class IOSSimulator extends Device {
     bool prebuiltApplication = false,
     bool ipv6 = false,
   }) async {
-    if (!prebuiltApplication && package is BuildableIOSApp) {
+    if (!prebuiltApplication && package is BuildableIOSLikeApp) {
       globals.printTrace('Building ${package.name} for $id.');
 
       try {
@@ -420,7 +420,7 @@ class IOSSimulator extends Device {
     }
   }
 
-  Future<void> _setupUpdatedApplicationBundle(covariant BuildableIOSApp app, BuildInfo buildInfo, String mainPath) async {
+  Future<void> _setupUpdatedApplicationBundle(covariant BuildableIOSLikeApp app, BuildInfo buildInfo, String mainPath) async {
     await sideloadUpdatedAssetsForInstalledApplicationBundle(buildInfo, mainPath);
 
     // Step 1: Build the Xcode project.
@@ -490,8 +490,8 @@ class IOSSimulator extends Device {
   }
 
   @override
-  DeviceLogReader getLogReader({ covariant IOSApp app }) {
-    assert(app is IOSApp);
+  DeviceLogReader getLogReader({ covariant IOSLikeApp app }) {
+    assert(app is IOSLikeApp);
     _logReaders ??= <ApplicationPackage, _IOSSimulatorLogReader>{};
     return _logReaders.putIfAbsent(app, () => _IOSSimulatorLogReader(this, app));
   }
@@ -571,7 +571,7 @@ Future<Process> launchSystemLogTool(IOSSimulator device) async {
 }
 
 class _IOSSimulatorLogReader extends DeviceLogReader {
-  _IOSSimulatorLogReader(this.device, IOSApp app) {
+  _IOSSimulatorLogReader(this.device, IOSLikeApp app) {
     _linesController = StreamController<String>.broadcast(
       onListen: _start,
       onCancel: _stop,

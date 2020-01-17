@@ -157,7 +157,7 @@ class IOSDevice extends Device {
   @override
   final String name;
 
-  Map<IOSApp, DeviceLogReader> _logReaders;
+  Map<IOSLikeApp, DeviceLogReader> _logReaders;
 
   DevicePortForwarder _portForwarder;
 
@@ -201,7 +201,7 @@ class IOSDevice extends Device {
   }
 
   @override
-  Future<bool> isAppInstalled(IOSApp app) async {
+  Future<bool> isAppInstalled(IOSLikeApp app) async {
     RunResult apps;
     try {
       apps = await processUtils.run(
@@ -218,10 +218,10 @@ class IOSDevice extends Device {
   }
 
   @override
-  Future<bool> isLatestBuildInstalled(IOSApp app) async => false;
+  Future<bool> isLatestBuildInstalled(IOSLikeApp app) async => false;
 
   @override
-  Future<bool> installApp(IOSApp app) async {
+  Future<bool> installApp(IOSLikeApp app) async {
     final Directory bundle = globals.fs.directory(app.deviceBundlePath);
     if (!bundle.existsSync()) {
       globals.printError('Could not find application bundle at ${bundle.path}; have you run "flutter build ios"?');
@@ -244,7 +244,7 @@ class IOSDevice extends Device {
   }
 
   @override
-  Future<bool> uninstallApp(IOSApp app) async {
+  Future<bool> uninstallApp(IOSLikeApp app) async {
     try {
       await processUtils.run(
         <String>[_installerPath, '-U', app.id],
@@ -265,7 +265,7 @@ class IOSDevice extends Device {
 
   @override
   Future<LaunchResult> startApp(
-    IOSApp package, {
+    IOSLikeApp package, {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
@@ -293,7 +293,7 @@ class IOSDevice extends Device {
 
       // Step 1: Build the precompiled/DBC application if necessary.
       final XcodeBuildResult buildResult = await buildXcodeProject(
-          app: package as BuildableIOSApp,
+          app: package as BuildableIOSLikeApp,
           buildInfo: debuggingOptions.buildInfo,
           targetOverride: mainPath,
           buildForDevice: true,
@@ -425,7 +425,7 @@ class IOSDevice extends Device {
   }
 
   @override
-  Future<bool> stopApp(IOSApp app) async {
+  Future<bool> stopApp(IOSLikeApp app) async {
     // Currently we don't have a way to stop an app running on iOS.
     return false;
   }
@@ -437,14 +437,14 @@ class IOSDevice extends Device {
   Future<String> get sdkNameAndVersion async => 'iOS $_sdkVersion';
 
   @override
-  DeviceLogReader getLogReader({ IOSApp app }) {
-    _logReaders ??= <IOSApp, DeviceLogReader>{};
+  DeviceLogReader getLogReader({ IOSLikeApp app }) {
+    _logReaders ??= <IOSLikeApp, DeviceLogReader>{};
     return _logReaders.putIfAbsent(app, () => IOSDeviceLogReader(this, app));
   }
 
   @visibleForTesting
-  void setLogReader(IOSApp app, DeviceLogReader logReader) {
-    _logReaders ??= <IOSApp, DeviceLogReader>{};
+  void setLogReader(IOSLikeApp app, DeviceLogReader logReader) {
+    _logReaders ??= <IOSLikeApp, DeviceLogReader>{};
     _logReaders[app] = logReader;
   }
 
@@ -474,7 +474,7 @@ class IOSDevice extends Device {
 
   @override
   Future<void> dispose() async {
-    _logReaders.forEach((IOSApp application, DeviceLogReader logReader) {
+    _logReaders.forEach((IOSLikeApp application, DeviceLogReader logReader) {
       logReader.dispose();
     });
     await _portForwarder?.dispose();
@@ -543,7 +543,7 @@ String decodeSyslog(String line) {
 
 @visibleForTesting
 class IOSDeviceLogReader extends DeviceLogReader {
-  IOSDeviceLogReader(this.device, IOSApp app) {
+  IOSDeviceLogReader(this.device, IOSLikeApp app) {
     _linesController = StreamController<String>.broadcast(
       onListen: _listenToSysLog,
       onCancel: dispose,

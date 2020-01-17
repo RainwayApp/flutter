@@ -320,6 +320,7 @@ String getNameForHostPlatform(HostPlatform platform) {
 enum TargetPlatform {
   android,
   ios,
+  tvos,
   darwin_x64,
   linux_x64,
   windows_x64,
@@ -395,6 +396,8 @@ String getNameForTargetPlatform(TargetPlatform platform) {
       return 'android-x86';
     case TargetPlatform.ios:
       return 'ios';
+    case TargetPlatform.tvos:
+      return 'tvos';
     case TargetPlatform.darwin_x64:
       return 'darwin-x64';
     case TargetPlatform.linux_x64:
@@ -434,6 +437,8 @@ TargetPlatform getTargetPlatformForName(String platform) {
       return TargetPlatform.fuchsia_x64;
     case 'ios':
       return TargetPlatform.ios;
+    case 'tvos':
+      return TargetPlatform.tvos;
     case 'darwin-x64':
       return TargetPlatform.darwin_x64;
     case 'linux-x64':

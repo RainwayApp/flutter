@@ -54,7 +54,7 @@ class BuildIOSCommand extends BuildSubCommand {
       throwToolExit('Building for iOS is only supported on the Mac.');
     }
 
-    final BuildableIOSApp app = await applicationPackages.getPackageForPlatform(TargetPlatform.ios) as BuildableIOSApp;
+    final BuildableIOSLikeApp app = await applicationPackages.getPackageForPlatform(TargetPlatform.ios) as BuildableIOSLikeApp;
 
     if (app == null) {
       throwToolExit('Application not configured for iOS');

@@ -997,20 +997,20 @@ class TvOSEngineArtifacts extends EngineCachedArtifact {
   TvOSEngineArtifacts(Cache cache) : super(
     'tvos-sdk',
     cache,
-    <DevelopmentArtifact>{ DevelopmentArtifact.iOS },
+    DevelopmentArtifact.tvOS,
   );
 
   @override
   List<List<String>> getBinaryDirs() {
     return <List<String>>[
-      if (platform.isMacOS || cache.includeAllPlatforms)
+      if (globals.platform.isMacOS || cache.includeAllPlatforms)
         ..._tvosBinaryDirs,
     ];
   }
 
   @override
   List<String> getLicenseDirs() {
-    if (cache.includeAllPlatforms || platform.isMacOS) {
+    if (cache.includeAllPlatforms || globals.platform.isMacOS) {
       return const <String>['tvos', 'tvos-profile', 'tvos-release'];
     }
     return const <String>[];

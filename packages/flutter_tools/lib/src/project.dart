@@ -115,6 +115,10 @@ class FlutterProject {
   IosProject _ios;
   IosProject get ios => _ios ??= IosProject.fromFlutter(this);
 
+  /// The iOS sub project of this project.
+  TvosProject _tvos;
+  TvosProject get tvos => _tvos ??= TvosProject.fromFlutter(this);
+
   /// The Android sub project of this project.
   AndroidProject _android;
   AndroidProject get android => _android ??= AndroidProject._(this);
@@ -307,12 +311,12 @@ abstract class XcodeBasedProject {
   Directory get symlinks;
 }
 
-/// Represents the iOS sub-project of a Flutter project.
+/// Represents the iOS or tvOS sub-project of a Flutter project.
 ///
-/// Instances will reflect the contents of the `ios/` sub-folder of
-/// Flutter applications and the `.ios/` sub-folder of Flutter module projects.
-class IosProject extends FlutterProjectPlatform implements XcodeBasedProject {
-  IosProject.fromFlutter(this.parent);
+/// Instances will reflect the contents of the `tvos/` sub-folder of
+/// Flutter applications and the `.tvos/` sub-folder of Flutter module projects.
+abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBasedProject {
+  IosLikeProject.fromFlutter(this.parent);
 
   @override
   final FlutterProject parent;
@@ -324,8 +328,8 @@ class IosProject extends FlutterProjectPlatform implements XcodeBasedProject {
   static const String _productBundleIdVariable = r'$(PRODUCT_BUNDLE_IDENTIFIER)';
   static const String _hostAppBundleName = 'Runner';
 
-  Directory get ephemeralDirectory => parent.directory.childDirectory('.ios');
-  Directory get _editableDirectory => parent.directory.childDirectory('ios');
+  Directory get ephemeralDirectory => parent.directory.childDirectory('.$buildFolder');
+  Directory get _editableDirectory => parent.directory.childDirectory(buildFolder);
 
   /// This parent folder of `Runner.xcodeproj`.
   Directory get hostAppRoot {
@@ -496,18 +500,18 @@ class IosProject extends FlutterProjectPlatform implements XcodeBasedProject {
 
     _deleteIfExistsSync(ephemeralDirectory);
     _overwriteFromTemplate(
-      globals.fs.path.join('module', 'ios', 'library'),
+      globals.fs.path.join('module', buildFolder, 'library'),
       ephemeralDirectory,
     );
     // Add ephemeral host app, if a editable host app does not already exist.
     if (!_editableDirectory.existsSync()) {
       _overwriteFromTemplate(
-        globals.fs.path.join('module', 'ios', 'host_app_ephemeral'),
+        globals.fs.path.join('module', buildFolder, 'host_app_ephemeral'),
         ephemeralDirectory,
       );
       if (hasPlugins(parent)) {
         _overwriteFromTemplate(
-          globals.fs.path.join('module', 'ios', 'host_app_ephemeral_cocoapods'),
+          globals.fs.path.join('module', buildFolder, 'host_app_ephemeral_cocoapods'),
           ephemeralDirectory,
         );
       }
@@ -534,23 +538,23 @@ class IosProject extends FlutterProjectPlatform implements XcodeBasedProject {
   Future<void> makeHostAppEditable() async {
     assert(isModule);
     if (_editableDirectory.existsSync()) {
-      throwToolExit('iOS host app is already editable. To start fresh, delete the ios/ folder.');
+      throwToolExit('$platformName host app is already editable. To start fresh, delete the $buildFolder/ folder.');
     }
     _deleteIfExistsSync(ephemeralDirectory);
     _overwriteFromTemplate(
-      globals.fs.path.join('module', 'ios', 'library'),
+      globals.fs.path.join('module', buildFolder, 'library'),
       ephemeralDirectory,
     );
     _overwriteFromTemplate(
-      globals.fs.path.join('module', 'ios', 'host_app_ephemeral'),
+      globals.fs.path.join('module', buildFolder, 'host_app_ephemeral'),
       _editableDirectory,
     );
     _overwriteFromTemplate(
-      globals.fs.path.join('module', 'ios', 'host_app_ephemeral_cocoapods'),
+      globals.fs.path.join('module', buildFolder, 'host_app_ephemeral_cocoapods'),
       _editableDirectory,
     );
     _overwriteFromTemplate(
-      globals.fs.path.join('module', 'ios', 'host_app_editable_cocoapods'),
+      globals.fs.path.join('module', buildFolder, 'host_app_editable_cocoapods'),
       _editableDirectory,
     );
     await _updateGeneratedXcodeConfigIfNeeded();
@@ -582,6 +586,43 @@ class IosProject extends FlutterProjectPlatform implements XcodeBasedProject {
       overwriteExisting: true,
     );
   }
+
+  String get simulatorBundleFolder;
+  String get deviceBundleFolder;
+  String get buildFolder;
+  String get platformName;
+}
+
+class IosProject extends IosLikeProject {
+  IosProject.fromFlutter(FlutterProject project) : super.fromFlutter(project);
+
+  @override
+  String get simulatorBundleFolder => 'iphonesimulator';
+
+  @override
+  String get deviceBundleFolder => 'iphoneos';
+
+  @override
+  String get buildFolder => 'ios';
+
+  @override
+  String get platformName => 'iOS';
+}
+
+class TvosProject extends IosLikeProject {
+  TvosProject.fromFlutter(FlutterProject project) : super.fromFlutter(project);
+
+  @override
+  String get simulatorBundleFolder => 'appletvsimulator';
+
+  @override
+  String get deviceBundleFolder => 'appletvos';
+
+  @override
+  String get buildFolder => 'tvos';
+
+  @override
+  String get platformName => 'tvOS';
 }
 
 /// Represents the Android sub-project of a Flutter project.

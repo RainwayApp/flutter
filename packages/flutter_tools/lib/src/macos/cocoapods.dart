@@ -351,7 +351,7 @@ class CocoaPods {
   //
   // Warn the user if they are still symlinking to the framework.
   void _warnIfPodfileOutOfDate(XcodeBasedProject xcodeProject) {
-    if (xcodeProject is! IosProject) {
+    if (xcodeProject is! IosLikeProject) {
       return;
     }
     final Link flutterSymlink = globals.fs.link(globals.fs.path.join(

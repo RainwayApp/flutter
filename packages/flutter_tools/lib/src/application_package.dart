@@ -49,8 +49,12 @@ class ApplicationPackageFactory {
             : AndroidApk.fromApk(applicationBinary);
       case TargetPlatform.ios:
         return applicationBinary == null
-            ? await IOSApp.fromIosProject(FlutterProject.current().ios)
-            : IOSApp.fromPrebuiltApp(applicationBinary);
+            ? await IOSLikeApp.fromIosProject(FlutterProject.current().ios)
+            : IOSLikeApp.fromPrebuiltApp(applicationBinary);
+      case TargetPlatform.tvos:
+        return applicationBinary == null
+            ? await IOSLikeApp.fromTvosProject(FlutterProject.current().tvos)
+            : IOSLikeApp.fromPrebuiltApp(applicationBinary);
       case TargetPlatform.tester:
         return FlutterTesterApp.fromCurrentDirectory();
       case TargetPlatform.darwin_x64:
@@ -266,11 +270,11 @@ class AndroidApk extends ApplicationPackage {
 /// Tests whether a [Directory] is an iOS bundle directory
 bool _isBundleDirectory(Directory dir) => dir.path.endsWith('.app');
 
-abstract class IOSApp extends ApplicationPackage {
-  IOSApp({@required String projectBundleId}) : super(id: projectBundleId);
+abstract class IOSLikeApp extends ApplicationPackage {
+  IOSLikeApp({@required String projectBundleId}) : super(id: projectBundleId);
 
-  /// Creates a new IOSApp from an existing app bundle or IPA.
-  factory IOSApp.fromPrebuiltApp(FileSystemEntity applicationBinary) {
+  /// Creates a new IOSLikeApp from an existing app bundle or IPA.
+  factory IOSLikeApp.fromPrebuiltApp(FileSystemEntity applicationBinary) {
     final FileSystemEntityType entityType = globals.fs.typeSync(applicationBinary.path);
     if (entityType == FileSystemEntityType.notFound) {
       globals.printError(
@@ -322,14 +326,14 @@ abstract class IOSApp extends ApplicationPackage {
       return null;
     }
 
-    return PrebuiltIOSApp(
+    return PrebuiltIOSLikeApp(
       bundleDir: bundleDir,
       bundleName: globals.fs.path.basename(bundleDir.path),
       projectBundleId: id,
     );
   }
 
-  static Future<IOSApp> fromIosProject(IosProject project) {
+  static Future<IOSLikeApp> _fromIosLikeProject(IosLikeProject project, String platformName) {
     if (getCurrentHostPlatform() != HostPlatform.darwin_x64) {
       return null;
     }
@@ -339,14 +343,22 @@ abstract class IOSApp extends ApplicationPackage {
       return null;
     }
     if (!project.xcodeProject.existsSync()) {
-      globals.printError('Expected ios/Runner.xcodeproj but this file is missing.');
+      globals.printError('Expected $platformName/Runner.xcodeproj but this file is missing.');
       return null;
     }
     if (!project.xcodeProjectInfoFile.existsSync()) {
-      globals.printError('Expected ios/Runner.xcodeproj/project.pbxproj but this file is missing.');
+      globals.printError('Expected $platformName/Runner.xcodeproj/project.pbxproj but this file is missing.');
       return null;
     }
-    return BuildableIOSApp.fromProject(project);
+    return BuildableIOSLikeApp.fromProject(project);
+  }
+
+  static Future<IOSLikeApp> fromIosProject(IosProject project) {
+    return _fromIosLikeProject(project, 'ios');
+  }
+
+  static Future<IOSLikeApp> fromTvosProject(TvosProject project) {
+    return _fromIosLikeProject(project, 'tvos');
   }
 
   @override
@@ -357,33 +369,34 @@ abstract class IOSApp extends ApplicationPackage {
   String get deviceBundlePath;
 }
 
-class BuildableIOSApp extends IOSApp {
-  BuildableIOSApp(this.project, String projectBundleId)
+class BuildableIOSLikeApp extends IOSLikeApp {
+  BuildableIOSLikeApp(this.project, String projectBundleId)
     : super(projectBundleId: projectBundleId);
 
-  static Future<BuildableIOSApp> fromProject(IosProject project) async {
+  static Future<BuildableIOSLikeApp> fromProject(IosLikeProject project) async {
     final String projectBundleId = await project.productBundleIdentifier;
-    return BuildableIOSApp(project, projectBundleId);
+    return BuildableIOSLikeApp(project, projectBundleId);
   }
 
-  final IosProject project;
+  final IosLikeProject project;
 
   @override
   String get name => project.hostAppBundleName;
 
   @override
-  String get simulatorBundlePath => _buildAppPath('iphonesimulator');
+  String get simulatorBundlePath => _buildAppPath(project.simulatorBundleFolder);
 
   @override
-  String get deviceBundlePath => _buildAppPath('iphoneos');
+  String get deviceBundlePath => _buildAppPath(project.deviceBundleFolder);
 
   String _buildAppPath(String type) {
-    return globals.fs.path.join(getIosBuildDirectory(), type, name);
+    final String buildRoot = globals.fs.path.join(getBuildDirectory(), project.buildFolder);
+    return globals.fs.path.join(buildRoot, type, name);
   }
 }
 
-class PrebuiltIOSApp extends IOSApp {
-  PrebuiltIOSApp({
+class PrebuiltIOSLikeApp extends IOSLikeApp {
+  PrebuiltIOSLikeApp({
     this.bundleDir,
     this.bundleName,
     @required String projectBundleId,
@@ -408,7 +421,8 @@ class ApplicationPackageStore {
   ApplicationPackageStore({ this.android, this.iOS, this.fuchsia });
 
   AndroidApk android;
-  IOSApp iOS;
+  IOSLikeApp iOS;
+  IOSLikeApp tvOS;
   FuchsiaApp fuchsia;
   LinuxApp linux;
   MacOSApp macOS;
@@ -424,8 +438,11 @@ class ApplicationPackageStore {
         android ??= await AndroidApk.fromAndroidProject(FlutterProject.current().android);
         return android;
       case TargetPlatform.ios:
-        iOS ??= await IOSApp.fromIosProject(FlutterProject.current().ios);
+        iOS ??= await IOSLikeApp.fromIosProject(FlutterProject.current().ios);
         return iOS;
+      case TargetPlatform.tvos:
+        tvOS ??= await IOSLikeApp.fromTvosProject(FlutterProject.current().tvos);
+        return tvOS;
       case TargetPlatform.fuchsia_arm64:
       case TargetPlatform.fuchsia_x64:
         fuchsia ??= FuchsiaApp.fromFuchsiaProject(FlutterProject.current().fuchsia);

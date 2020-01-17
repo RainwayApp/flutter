@@ -571,7 +571,7 @@ Future<XcodeBuildResult> buildXcodeProject({
   }
 }
 
-Future<RunResult> _runBuildWithRetries(List<String> buildCommands, BuildableIOSApp app) async {
+Future<RunResult> _runBuildWithRetries(List<String> buildCommands, BuildableIOSLikeApp app) async {
   int buildRetryDelaySeconds = 1;
   int remainingTries = 8;
 
@@ -724,7 +724,7 @@ bool _checkXcodeVersion() {
   return true;
 }
 
-bool upgradePbxProjWithFlutterAssets(IosProject project) {
+bool upgradePbxProjWithFlutterAssets(IosLikeProject project) {
   final File xcodeProjectFile = project.xcodeProjectInfoFile;
   assert(xcodeProjectFile.existsSync());
   final List<String> lines = xcodeProjectFile.readAsLinesSync();
