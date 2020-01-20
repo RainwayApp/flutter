@@ -275,12 +275,14 @@ Future<XcodeBuildResult> buildXcodeProject({
     return XcodeBuildResult(success: false);
   }
 
+  final String buildFolder = app.project.buildFolder;
+  final String buildDirectory = app.project.buildDirectory;
 
   final XcodeProjectInfo projectInfo = await xcodeProjectInterpreter.getInfo(app.project.hostAppRoot.path);
   if (!projectInfo.targets.contains('Runner')) {
     globals.printError('The Xcode project does not define target "Runner" which is needed by Flutter tooling.');
     globals.printError('Open Xcode to fix the problem:');
-    globals.printError('  open ios/Runner.xcworkspace');
+    globals.printError('  open $buildFolder/Runner.xcworkspace');
     return XcodeBuildResult(success: false);
   }
   final String scheme = projectInfo.schemeFor(buildInfo);
@@ -301,7 +303,7 @@ Future<XcodeBuildResult> buildXcodeProject({
     globals.printError('The Xcode project defines build configurations: ${projectInfo.buildConfigurations.join(', ')}');
     globals.printError('Flutter expects a build configuration named ${XcodeProjectInfo.expectedBuildConfigurationFor(buildInfo, scheme)} or similar.');
     globals.printError('Open Xcode to fix the problem:');
-    globals.printError('  open ios/Runner.xcworkspace');
+    globals.printError('  open $buildFolder/Runner.xcworkspace');
     globals.printError('1. Click on "Runner" in the project navigator.');
     globals.printError('2. Ensure the Runner PROJECT is selected, not the Runner TARGET.');
     if (buildInfo.isDebug) {
@@ -343,16 +345,30 @@ Future<XcodeBuildResult> buildXcodeProject({
 
   Map<String, String> autoSigningConfigs;
   if (codesign && buildForDevice) {
-    autoSigningConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+    autoSigningConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
   }
 
   final FlutterProject project = FlutterProject.current();
+  IosLikeProject subproject;
+  XcodePlatform xcodePlatform;
+  if (app.project is IosProject) {
+    subproject = project.ios;
+    xcodePlatform = XcodePlatform.ios;
+  } else if (app.project is TvosProject) {
+    subproject = project.tvos;
+    xcodePlatform = XcodePlatform.tvos;
+  } else {
+    globals.printError('Unrecognized app project type: ${app.project.runtimeType}');
+    return XcodeBuildResult(success: false);
+  }
+
   await updateGeneratedXcodeProperties(
     project: project,
     targetOverride: targetOverride,
     buildInfo: buildInfo,
+    xcodePlatform: xcodePlatform,
   );
-  await processPodsIfNeeded(project.ios, getIosBuildDirectory(), buildInfo.mode);
+  await processPodsIfNeeded(subproject, subproject.buildDirectory, buildInfo.mode, xcodePlatform);
 
   final List<String> buildCommands = <String>[
     '/usr/bin/env',
@@ -384,16 +400,16 @@ Future<XcodeBuildResult> buildXcodeProject({
       buildCommands.addAll(<String>[
         '-workspace', globals.fs.path.basename(entity.path),
         '-scheme', scheme,
-        'BUILD_DIR=${globals.fs.path.absolute(getIosBuildDirectory())}',
+        'BUILD_DIR=${globals.fs.path.absolute(buildDirectory)}',
       ]);
       break;
     }
   }
 
   if (buildForDevice) {
-    buildCommands.addAll(<String>['-sdk', 'iphoneos']);
+    buildCommands.addAll(<String>['-sdk', app.project.deviceSdkName]);
   } else {
-    buildCommands.addAll(<String>['-sdk', 'iphonesimulator', '-arch', 'x86_64']);
+    buildCommands.addAll(<String>['-sdk', app.project.simulatorSdkName, '-arch', 'x86_64']);
   }
 
   if (activeArch != null) {
@@ -624,7 +640,7 @@ String readGeneratedXcconfig(String appPath) {
   return generatedXcconfigFile.readAsStringSync();
 }
 
-Future<void> diagnoseXcodeBuildFailure(XcodeBuildResult result) async {
+Future<void> diagnoseXcodeBuildFailure(XcodeBuildResult result, String buildFolder) async {
   if (result.xcodeBuildExecution != null &&
       result.xcodeBuildExecution.buildForPhysicalDevice &&
       result.stdout?.toUpperCase()?.contains('BITCODE') == true) {
@@ -658,7 +674,7 @@ Future<void> diagnoseXcodeBuildFailure(XcodeBuildResult result) async {
     globals.printError('');
     globals.printError('It appears that your application still contains the default signing identifier.');
     globals.printError("Try replacing 'com.example' with your signing id in Xcode:");
-    globals.printError('  open ios/Runner.xcworkspace');
+    globals.printError('  open $buildFolder/Runner.xcworkspace');
     return;
   }
   if (result.stdout?.contains('Code Sign error') == true) {
@@ -666,7 +682,7 @@ Future<void> diagnoseXcodeBuildFailure(XcodeBuildResult result) async {
     globals.printError('It appears that there was a problem signing your application prior to installation on the device.');
     globals.printError('');
     globals.printError('Verify that the Bundle Identifier in your project is your signing id in Xcode');
-    globals.printError('  open ios/Runner.xcworkspace');
+    globals.printError('  open $buildFolder/Runner.xcworkspace');
     globals.printError('');
     globals.printError("Also try selecting 'Product > Build' to fix the problem:");
     return;

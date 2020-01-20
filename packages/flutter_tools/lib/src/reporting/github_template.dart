@@ -92,7 +92,8 @@ ${_projectMetadataInformation()}
         ..writeln('**Module**: ${manifest.isModule}')
         ..writeln('**Plugin**: ${manifest.isPlugin}')
         ..writeln('**Android package**: ${manifest.androidPackage}')
-        ..writeln('**iOS bundle identifier**: ${manifest.iosBundleIdentifier}');
+        ..writeln('**iOS bundle identifier**: ${manifest.iosBundleIdentifier}')
+        ..writeln('**tvOS bundle identifier**: ${manifest.tvosBundleIdentifier}');
 
       final File file = project.flutterPluginsFile;
       if (file.existsSync()) {

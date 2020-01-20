@@ -932,7 +932,7 @@ Future<void> injectPlugins(FlutterProject project, {bool checkProjects = false})
   if (featureFlags.isWindowsEnabled && project.windows.existsSync()) {
     await _writeWindowsPluginRegistrant(project, plugins);
   }
-  for (final XcodeBasedProject subproject in <XcodeBasedProject>[project.ios, project.macos]) {
+  for (final XcodeBasedProject subproject in <XcodeBasedProject>[project.ios, project.tvos, project.macos]) {
     if (!project.isModule && (!checkProjects || subproject.existsSync())) {
       final CocoaPods cocoaPods = CocoaPods();
       if (plugins.isNotEmpty) {

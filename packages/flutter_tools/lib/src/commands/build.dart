@@ -41,7 +41,7 @@ class BuildCommand extends FlutterCommand {
   final String name = 'build';
 
   @override
-  final String description = 'Flutter build commaaaands.';
+  final String description = 'Flutter build commands.';
 
   @override
   Future<FlutterCommandResult> runCommand() async => null;

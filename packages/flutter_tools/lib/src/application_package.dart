@@ -333,32 +333,32 @@ abstract class IOSLikeApp extends ApplicationPackage {
     );
   }
 
-  static Future<IOSLikeApp> _fromIosLikeProject(IosLikeProject project, String platformName) {
+  static Future<IOSLikeApp> _fromIosLikeProject(IosLikeProject project) {
     if (getCurrentHostPlatform() != HostPlatform.darwin_x64) {
       return null;
     }
     if (!project.exists) {
-      // If the project doesn't exist at all the current hint to run flutter
-      // create is accurate.
+      globals.printError('This application is not configured to build on ${project.platformName}.');
+      globals.printError('To add ${project.platformName} support to a project, run `flutter create .`.');
       return null;
     }
     if (!project.xcodeProject.existsSync()) {
-      globals.printError('Expected $platformName/Runner.xcodeproj but this file is missing.');
+      globals.printError('Expected ${project.buildFolder}/Runner.xcodeproj but this file is missing.');
       return null;
     }
     if (!project.xcodeProjectInfoFile.existsSync()) {
-      globals.printError('Expected $platformName/Runner.xcodeproj/project.pbxproj but this file is missing.');
+      globals.printError('Expected ${project.buildFolder}/Runner.xcodeproj/project.pbxproj but this file is missing.');
       return null;
     }
     return BuildableIOSLikeApp.fromProject(project);
   }
 
   static Future<IOSLikeApp> fromIosProject(IosProject project) {
-    return _fromIosLikeProject(project, 'ios');
+    return _fromIosLikeProject(project);
   }
 
   static Future<IOSLikeApp> fromTvosProject(TvosProject project) {
-    return _fromIosLikeProject(project, 'tvos');
+    return _fromIosLikeProject(project);
   }
 
   @override
@@ -441,6 +441,7 @@ class ApplicationPackageStore {
         iOS ??= await IOSLikeApp.fromIosProject(FlutterProject.current().ios);
         return iOS;
       case TargetPlatform.tvos:
+        print(tvOS);
         tvOS ??= await IOSLikeApp.fromTvosProject(FlutterProject.current().tvos);
         return tvOS;
       case TargetPlatform.fuchsia_arm64:

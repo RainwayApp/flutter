@@ -178,6 +178,15 @@ class FlutterManifest {
     return null;
   }
 
+  /// Returns the iOS bundle identifier declared by this manifest in its
+  /// module descriptor. Returns null if there is no such declaration.
+  String get tvosBundleIdentifier {
+    if (isModule) {
+      return _flutterDescriptor['module']['tvosBundleIdentifier'] as String;
+    }
+    return null;
+  }
+
   List<Map<String, dynamic>> get fontsDescriptor {
     return fonts.map((Font font) => font.descriptor).toList();
   }
@@ -401,6 +410,9 @@ void _validateFlutter(YamlMap yaml, List<String> errors) {
         }
         if (kvp.value['iosBundleIdentifier'] != null && kvp.value['iosBundleIdentifier'] is! String) {
           errors.add('The "iosBundleIdentifier" section must be a string if set.');
+        }
+        if (kvp.value['tvosBundleIdentifier'] != null && kvp.value['tvosBundleIdentifier'] is! String) {
+          errors.add('The "tvosBundleIdentifier" section must be a string if set.');
         }
         break;
       case 'plugin':

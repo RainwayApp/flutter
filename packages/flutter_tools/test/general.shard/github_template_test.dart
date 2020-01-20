@@ -97,6 +97,7 @@ flutter:
     androidX: true
     androidPackage: com.example.failing.android
     iosBundleIdentifier: com.example.failing.ios
+    tvosBundleIdentifier: com.example.failing.tvos
 ''');
 
         pluginsFile

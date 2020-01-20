@@ -50,7 +50,8 @@
                     "properties": {
                         "androidX": { "type": "boolean" },
                         "androidPackage": { "type": "string" },
-                        "iosBundleIdentifier": { "type": "string" }
+                        "iosBundleIdentifier": { "type": "string" },
+                        "tvosBundleIdentifier": { "type": "string" }
                     }
                 },
                 "plugin": {

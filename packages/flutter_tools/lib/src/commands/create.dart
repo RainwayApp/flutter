@@ -134,6 +134,11 @@ class CreateCommand extends FlutterCommand {
       allowed: <String>['objc', 'swift'],
     );
     argParser.addOption(
+      'tvos-language',
+      defaultsTo: 'swift',
+      allowed: <String>['objc', 'swift'],
+    );
+    argParser.addOption(
       'android-language',
       abbr: 'a',
       defaultsTo: 'kotlin',
@@ -163,6 +168,7 @@ class CreateCommand extends FlutterCommand {
       CustomDimensions.commandCreateProjectType: stringArg('template'),
       CustomDimensions.commandCreateAndroidLanguage: stringArg('android-language'),
       CustomDimensions.commandCreateIosLanguage: stringArg('ios-language'),
+      CustomDimensions.commandCreateTvosLanguage: stringArg('tvos-language'),
     };
   }
 
@@ -388,6 +394,7 @@ class CreateCommand extends FlutterCommand {
       androidX: boolArg('androidx'),
       androidLanguage: stringArg('android-language'),
       iosLanguage: stringArg('ios-language'),
+      tvosLanguage: stringArg('tvos-language'),
       web: featureFlags.isWebEnabled,
       macos: featureFlags.isMacOSEnabled,
     );
@@ -544,7 +551,7 @@ To edit platform code in an IDE see https://flutter.dev/developing-packages/#edi
     final String exampleProjectName = projectName + '_example';
     templateContext['projectName'] = exampleProjectName;
     templateContext['androidIdentifier'] = _createAndroidIdentifier(organization, exampleProjectName);
-    templateContext['iosIdentifier'] = _createUTIIdentifier(organization, exampleProjectName);
+    templateContext['iosIdentifier'] = templateContext['tvosIdentifier'] = _createUTIIdentifier(organization, exampleProjectName);
     templateContext['description'] = 'Demonstrates how to use the $projectName plugin.';
     templateContext['pluginProjectName'] = projectName;
     templateContext['androidPluginIdentifier'] = androidPluginIdentifier;
@@ -595,6 +602,7 @@ To edit platform code in an IDE see https://flutter.dev/developing-packages/#edi
     String androidLanguage,
     bool androidX,
     String iosLanguage,
+    String tvosLanguage,
     String flutterRoot,
     bool renderDriverTest = false,
     bool withPluginHook = false,
@@ -614,6 +622,7 @@ To edit platform code in an IDE see https://flutter.dev/developing-packages/#edi
       'projectName': projectName,
       'androidIdentifier': _createAndroidIdentifier(organization, projectName),
       'iosIdentifier': appleIdentifier,
+      'tvosIdentifier': appleIdentifier,
       'macosIdentifier': appleIdentifier,
       'description': projectDescription,
       'dartSdk': '$flutterRoot/bin/cache/dart-sdk',
@@ -628,6 +637,7 @@ To edit platform code in an IDE see https://flutter.dev/developing-packages/#edi
       'withPluginHook': withPluginHook,
       'androidLanguage': androidLanguage,
       'iosLanguage': iosLanguage,
+      'tvosLanguage': tvosLanguage,
       'flutterRevision': FlutterVersion.instance.frameworkRevision,
       'flutterChannel': FlutterVersion.instance.channel,
       'web': web,

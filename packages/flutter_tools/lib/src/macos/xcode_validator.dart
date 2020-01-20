@@ -10,7 +10,7 @@ import 'xcode.dart';
 XcodeValidator get xcodeValidator => context.get<XcodeValidator>();
 
 class XcodeValidator extends DoctorValidator {
-  const XcodeValidator() : super('Xcode - develop for iOS and macOS');
+  const XcodeValidator() : super('Xcode - develop for iOS, tvOS, and macOS');
 
   @override
   Future<ValidationResult> validate() async {

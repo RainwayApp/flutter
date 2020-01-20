@@ -84,7 +84,7 @@ class BuildTvOSCommand extends BuildSubCommand {
     );
 
     if (!result.success) {
-      await diagnoseXcodeBuildFailure(result);
+      await diagnoseXcodeBuildFailure(result, app.project.buildFolder);
       throwToolExit('Encountered error while building for $logTarget.');
     }
 

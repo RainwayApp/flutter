@@ -20,6 +20,7 @@ import 'flutter_manifest.dart';
 import 'globals.dart' as globals;
 import 'ios/plist_parser.dart';
 import 'ios/xcodeproj.dart' as xcode;
+import 'ios/xcodeproj.dart';
 import 'platform_plugins.dart';
 import 'plugins.dart';
 import 'template.dart';
@@ -143,6 +144,19 @@ class FlutterProject {
   FuchsiaProject _fuchsia;
   FuchsiaProject get fuchsia => _fuchsia ??= FuchsiaProject._(this);
 
+  XcodeBasedProject xcodeSubproject(XcodePlatform platform) {
+    switch (platform) {
+      case xcode.XcodePlatform.ios:
+        return ios;
+      case xcode.XcodePlatform.macos:
+        return macos;
+      case xcode.XcodePlatform.tvos:
+        return tvos;
+      default:
+        throw ArgumentError.value(platform, 'platform');
+    }
+  }
+
   /// The `pubspec.yaml` file of this project.
   File get pubspecFile => directory.childFile('pubspec.yaml');
 
@@ -218,6 +232,9 @@ class FlutterProject {
     if ((ios.existsSync() && checkProjects) || !checkProjects) {
       await ios.ensureReadyForPlatformSpecificTooling();
     }
+    if ((tvos.existsSync() && checkProjects) || !checkProjects) {
+      await tvos.ensureReadyForPlatformSpecificTooling();
+    }
     // TODO(stuartmorgan): Revisit conditions once there is a plan for handling
     // non-default platform projects. For now, always treat checkProjects as
     // true for desktop.
@@ -268,12 +285,12 @@ abstract class FlutterProjectPlatform {
 
 /// Represents an Xcode-based sub-project.
 ///
-/// This defines interfaces common to iOS and macOS projects.
+/// This defines interfaces common to iOS, tvOS and macOS projects.
 abstract class XcodeBasedProject {
   /// The parent of this project.
   FlutterProject get parent;
 
-  /// Whether the subproject (either iOS or macOS) exists in the Flutter project.
+  /// Whether the subproject (either iOS, tvOS or macOS) exists in the Flutter project.
   bool existsSync();
 
   /// The Xcode project (.xcodeproj directory) of the host app.
@@ -339,7 +356,7 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
     return ephemeralDirectory;
   }
 
-  /// The root directory of the iOS wrapping of Flutter and plugins. This is the
+  /// The root directory of the iOS/tvOS wrapping of Flutter and plugins. This is the
   /// parent of the `Flutter/` folder into which Flutter artifacts are written
   /// during build.
   ///
@@ -353,7 +370,7 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
   /// True, if the parent Flutter project is a module project.
   bool get isModule => parent.isModule;
 
-  /// Whether the flutter application has an iOS project.
+  /// Whether the flutter application has a project for this platform (iOS or tvOS).
   bool get exists => hostAppRoot.existsSync();
 
   @override
@@ -476,6 +493,7 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
       await xcode.updateGeneratedXcodeProperties(
         project: parent,
         buildInfo: BuildInfo.debug,
+        xcodePlatform: xcodePlatform,
         targetOverride: bundle.defaultMainPath,
       );
     }
@@ -581,48 +599,65 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
       <String, dynamic>{
         'projectName': parent.manifest.appName,
         'iosIdentifier': parent.manifest.iosBundleIdentifier,
+        'tvosIdentifier': parent.manifest.tvosBundleIdentifier,
       },
       printStatusWhenWriting: false,
       overwriteExisting: true,
     );
   }
 
-  String get simulatorBundleFolder;
-  String get deviceBundleFolder;
+  String get deviceSdkName;
+  String get deviceBundleFolder => deviceSdkName;
+  String get simulatorSdkName;
+  String get simulatorBundleFolder => simulatorSdkName;
   String get buildFolder;
+  String get buildDirectory;
   String get platformName;
+  XcodePlatform get xcodePlatform;
 }
 
 class IosProject extends IosLikeProject {
   IosProject.fromFlutter(FlutterProject project) : super.fromFlutter(project);
 
   @override
-  String get simulatorBundleFolder => 'iphonesimulator';
+  String get simulatorSdkName => 'iphonesimulator';
 
   @override
-  String get deviceBundleFolder => 'iphoneos';
+  String get deviceSdkName => 'iphoneos';
 
   @override
   String get buildFolder => 'ios';
 
   @override
+  String get buildDirectory => getIosBuildDirectory();
+
+  @override
   String get platformName => 'iOS';
+
+  @override
+  XcodePlatform get xcodePlatform => XcodePlatform.ios;
 }
 
 class TvosProject extends IosLikeProject {
   TvosProject.fromFlutter(FlutterProject project) : super.fromFlutter(project);
 
   @override
-  String get simulatorBundleFolder => 'appletvsimulator';
+  String get simulatorSdkName => 'appletvsimulator';
 
   @override
-  String get deviceBundleFolder => 'appletvos';
+  String get deviceSdkName => 'appletvos';
 
   @override
   String get buildFolder => 'tvos';
 
   @override
+  String get buildDirectory => getTvosBuildDirectory();
+
+  @override
   String get platformName => 'tvOS';
+
+  @override
+  XcodePlatform get xcodePlatform => XcodePlatform.tvos;
 }
 
 /// Represents the Android sub-project of a Flutter project.
@@ -953,7 +988,7 @@ class MacOSProject extends FlutterProjectPlatform implements XcodeBasedProject {
       await xcode.updateGeneratedXcodeProperties(
         project: parent,
         buildInfo: BuildInfo.debug,
-        useMacOSConfig: true,
+        xcodePlatform: XcodePlatform.macos,
         setSymroot: false,
       );
     }

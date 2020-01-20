@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:file/file.dart';
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 
 import '../aot.dart';
@@ -182,7 +183,7 @@ class BuildIOSFrameworkCommand extends BuildSubCommand {
       await _produceAppFramework(mode, iPhoneBuildOutput, simulatorBuildOutput, modeDirectory);
 
       // Build and copy plugins.
-      await processPodsIfNeeded(_project.ios, getIosBuildDirectory(), mode);
+      await processPodsIfNeeded(_project.ios, getIosBuildDirectory(), mode, XcodePlatform.ios);
       if (hasPlugins(_project)) {
         await _producePlugins(mode, xcodeBuildConfiguration, iPhoneBuildOutput, simulatorBuildOutput, modeDirectory, outputDirectory);
       }
