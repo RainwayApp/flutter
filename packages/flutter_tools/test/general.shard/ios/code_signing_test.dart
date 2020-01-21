@@ -25,7 +25,7 @@ void main() {
     ProcessManager mockProcessManager;
     Config mockConfig;
     IosProject mockIosProject;
-    BuildableIOSApp app;
+    BuildableIOSLikeApp app;
     AnsiTerminal testTerminal;
 
     setUp(() async {
@@ -39,12 +39,12 @@ void main() {
       });
       testTerminal = TestTerminal();
       testTerminal.usesTerminalUi = true;
-      app = await BuildableIOSApp.fromProject(mockIosProject);
+      app = await BuildableIOSLikeApp.fromProject(mockIosProject);
     });
 
     testUsingContext('No auto-sign if Xcode project settings are not available', () async {
       when(mockIosProject.buildSettings).thenReturn(null);
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
       expect(signingConfigs, isNull);
     });
 
@@ -54,7 +54,7 @@ void main() {
           'DEVELOPMENT_TEAM': 'abc',
         });
       });
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
       expect(signingConfigs, isNull);
       expect(testLogger.statusText, equals(
         'Automatically signing iOS for device deployment using specified development team in Xcode project: abc\n'
@@ -66,7 +66,7 @@ void main() {
     testUsingContext('No auto-sign if security or openssl not available', () async {
       when(mockProcessManager.run(<String>['which', 'security']))
           .thenAnswer((_) => Future<ProcessResult>.value(exitsFail));
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
       expect(signingConfigs, isNull);
     },
     overrides: <Type, Generator>{
@@ -93,7 +93,7 @@ void main() {
 
       Map<String, String> signingConfigs;
       try {
-        signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+        signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
         fail('No identity should throw tool error');
       } on ToolExit {
         expect(signingConfigs, isNull);
@@ -159,7 +159,7 @@ void main() {
       when(mockProcess.stderr).thenAnswer((Invocation invocation) => mockStdErr);
       when(mockProcess.exitCode).thenAnswer((_) async => 0);
 
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
 
       expect(testLogger.statusText, contains('iPhone Developer: Profile 1 (1111AAAA11)'));
       expect(testLogger.errorText, isEmpty);
@@ -228,7 +228,7 @@ void main() {
 
       Map<String, String> signingConfigs;
       try {
-        signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+        signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
       } catch (e) {
         // This should not throw
         expect(true, false);
@@ -302,7 +302,7 @@ void main() {
       when(mockOpenSslProcess.stderr).thenAnswer((Invocation invocation) => mockOpenSslStdErr);
       when(mockOpenSslProcess.exitCode).thenAnswer((_) => Future<int>.value(0));
 
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
 
       expect(
         testLogger.statusText,
@@ -384,7 +384,7 @@ void main() {
       when(mockOpenSslProcess.stderr).thenAnswer((Invocation invocation) => mockOpenSslStdErr);
       when(mockOpenSslProcess.exitCode).thenAnswer((_) => Future<int>.value(0));
 
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
 
       expect(
         testLogger.statusText,
@@ -458,7 +458,7 @@ void main() {
       when(mockOpenSslProcess.exitCode).thenAnswer((_) => Future<int>.value(0));
       when<String>(mockConfig.getValue('ios-signing-cert') as String).thenReturn('iPhone Developer: Profile 3 (3333CCCC33)');
 
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
 
       expect(
         testLogger.statusText,
@@ -538,7 +538,7 @@ void main() {
       when(mockOpenSslProcess.exitCode).thenAnswer((_) => Future<int>.value(0));
       when<String>(mockConfig.getValue('ios-signing-cert') as String).thenReturn('iPhone Developer: Invalid Profile');
 
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
 
       expect(
         testLogger.errorText.replaceAll('\n', ' '),
@@ -576,7 +576,7 @@ void main() {
         ProcessResult(0, 1, '', '')
       ));
 
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
       expect(signingConfigs, isNull);
     },
     overrides: <Type, Generator>{
@@ -620,7 +620,7 @@ void main() {
         ProcessResult(1, 1, '', '' ))
       );
 
-      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosApp: app);
+      final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(iosLikeApp: app);
       expect(signingConfigs, isNull);
     },
     overrides: <Type, Generator>{

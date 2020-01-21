@@ -112,6 +112,16 @@ class Plugin {
           IOSPlugin.fromYaml(name, platformsYaml[IOSPlugin.kConfigKey] as YamlMap);
     }
 
+    if (_providesImplementationForPlatform(platformsYaml, TvOSPlugin.kConfigKey)) {
+      platforms[TvOSPlugin.kConfigKey] =
+          TvOSPlugin.fromYaml(name, platformsYaml[TvOSPlugin.kConfigKey] as YamlMap);
+    } else if (_providesImplementationForPlatform(platformsYaml, IOSPlugin.kConfigKey)) {
+      // HACK: We're going to accept iOS plugins as tvOS plugins.
+      globals.logger.printStatus('Applying tvOS plugin hack! $name $path');
+      platforms[TvOSPlugin.kConfigKey] =
+          TvOSPlugin.fromYaml(name, platformsYaml[IOSPlugin.kConfigKey] as YamlMap);
+    }
+
     if (_providesImplementationForPlatform(platformsYaml, LinuxPlugin.kConfigKey)) {
       platforms[LinuxPlugin.kConfigKey] =
           LinuxPlugin.fromYaml(name, platformsYaml[LinuxPlugin.kConfigKey] as YamlMap);
@@ -813,6 +823,47 @@ Future<void> _writeIOSPluginRegistrant(FlutterProject project, List<Plugin> plug
   }
 }
 
+Future<void> _writeTvOSPluginRegistrant(FlutterProject project, List<Plugin> plugins) async {
+  final List<Map<String, dynamic>> tvosPlugins = _extractPlatformMaps(plugins, TvOSPlugin.kConfigKey);
+  final Map<String, dynamic> context = <String, dynamic>{
+    'os': 'tvos',
+    'deploymentTarget': '13.0',
+    'framework': 'Flutter',
+    'plugins': tvosPlugins,
+  };
+  final String registryDirectory = project.tvos.pluginRegistrantHost.path;
+  if (project.isModule) {
+    final String registryClassesDirectory = globals.fs.path.join(registryDirectory, 'Classes');
+    _renderTemplateToFile(
+      _pluginRegistrantPodspecTemplate,
+      context,
+      globals.fs.path.join(registryDirectory, 'FlutterPluginRegistrant.podspec'),
+    );
+    _renderTemplateToFile(
+      _objcPluginRegistryHeaderTemplate,
+      context,
+      globals.fs.path.join(registryClassesDirectory, 'GeneratedPluginRegistrant.h'),
+    );
+    _renderTemplateToFile(
+      _objcPluginRegistryImplementationTemplate,
+      context,
+      globals.fs.path.join(registryClassesDirectory, 'GeneratedPluginRegistrant.m'),
+    );
+  } else {
+    _renderTemplateToFile(
+      _objcPluginRegistryHeaderTemplate,
+      context,
+      globals.fs.path.join(registryDirectory, 'GeneratedPluginRegistrant.h'),
+    );
+    _renderTemplateToFile(
+      _objcPluginRegistryImplementationTemplate,
+      context,
+      globals.fs.path.join(registryDirectory, 'GeneratedPluginRegistrant.m'),
+    );
+  }
+}
+
+
 Future<void> _writeLinuxPluginRegistrant(FlutterProject project, List<Plugin> plugins) async {
   final List<Map<String, dynamic>> linuxPlugins = _extractPlatformMaps(plugins, LinuxPlugin.kConfigKey);
   final Map<String, dynamic> context = <String, dynamic>{
@@ -919,6 +970,9 @@ Future<void> injectPlugins(FlutterProject project, {bool checkProjects = false})
   }
   if ((checkProjects && project.ios.existsSync()) || !checkProjects) {
     await _writeIOSPluginRegistrant(project, plugins);
+  }
+  if ((checkProjects && project.tvos.existsSync()) || !checkProjects) {
+    await _writeTvOSPluginRegistrant(project, plugins);
   }
   // TODO(stuartmorgan): Revisit the conditions here once the plans for handling
   // desktop in existing projects are in place. For now, ignore checkProjects

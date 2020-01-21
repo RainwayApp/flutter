@@ -36,7 +36,7 @@ import '../../src/common.dart';
 import '../../src/context.dart';
 import '../../src/mocks.dart';
 
-class MockIOSApp extends Mock implements IOSApp {}
+class MockIOSLikeApp extends Mock implements IOSLikeApp {}
 class MockApplicationPackage extends Mock implements ApplicationPackage {}
 class MockArtifacts extends Mock implements Artifacts {}
 class MockCache extends Mock implements Cache {}
@@ -93,8 +93,8 @@ void main() {
 
     group('.dispose()', () {
       IOSDevice device;
-      MockIOSApp appPackage1;
-      MockIOSApp appPackage2;
+      MockIOSLikeApp appPackage1;
+      MockIOSLikeApp appPackage2;
       IOSDeviceLogReader logReader1;
       IOSDeviceLogReader logReader2;
       MockProcess mockProcess1;
@@ -113,7 +113,7 @@ void main() {
 
       IOSDeviceLogReader createLogReader(
           IOSDevice device,
-          IOSApp appPackage,
+          IOSLikeApp appPackage,
           Process process) {
         final IOSDeviceLogReader logReader = IOSDeviceLogReader(device, appPackage);
         logReader.idevicesyslogProcess = process;
@@ -121,8 +121,8 @@ void main() {
       }
 
       setUp(() {
-        appPackage1 = MockIOSApp();
-        appPackage2 = MockIOSApp();
+        appPackage1 = MockIOSLikeApp();
+        appPackage2 = MockIOSLikeApp();
         when(appPackage1.name).thenReturn('flutterApp1');
         when(appPackage2.name).thenReturn('flutterApp2');
         mockProcess1 = MockProcess();
@@ -151,7 +151,7 @@ void main() {
     });
 
     group('startApp', () {
-      MockIOSApp mockApp;
+      MockIOSLikeApp mockApp;
       MockArtifacts mockArtifacts;
       MockCache mockCache;
       MockFileSystem mockFileSystem;
@@ -182,7 +182,7 @@ void main() {
       setUp(() {
         Cache.disableLocking();
 
-        mockApp = MockIOSApp();
+        mockApp = MockIOSLikeApp();
         mockArtifacts = MockArtifacts();
         mockCache = MockCache();
         when(mockCache.dyLdLibEntry).thenReturn(libraryEntry);
@@ -587,7 +587,7 @@ void main() {
             additionalSetup();
           }
 
-          final IOSApp app = await AbsoluteBuildableIOSApp.fromProject(
+          final IOSLikeApp app = await AbsoluteBuildableIOSLikeApp.fromProject(
             FlutterProject.fromDirectory(projectDir).ios);
           final IOSDevice device = IOSDevice('123');
 
@@ -666,7 +666,7 @@ void main() {
     });
 
     group('Process calls', () {
-      MockIOSApp mockApp;
+      MockIOSLikeApp mockApp;
       MockArtifacts mockArtifacts;
       MockCache mockCache;
       MockFileSystem mockFileSystem;
@@ -682,7 +682,7 @@ void main() {
       );
 
       setUp(() {
-        mockApp = MockIOSApp();
+        mockApp = MockIOSLikeApp();
         mockArtifacts = MockArtifacts();
         mockCache = MockCache();
         when(mockCache.dyLdLibEntry).thenReturn(libraryEntry);
@@ -879,7 +879,7 @@ Runner(UIKit)[297] <Notice>: E is for enpitsu"
 
       final IOSDevice device = IOSDevice('123456');
       final DeviceLogReader logReader = device.getLogReader(
-        app: await BuildableIOSApp.fromProject(mockIosProject),
+        app: await BuildableIOSLikeApp.fromProject(mockIosProject),
       );
 
       final List<String> lines = await logReader.logLines.toList();
@@ -904,7 +904,7 @@ Runner(libsystem_asl.dylib)[297] <Notice>: libMobileGestalt
 
       final IOSDevice device = IOSDevice('123456');
       final DeviceLogReader logReader = device.getLogReader(
-        app: await BuildableIOSApp.fromProject(mockIosProject),
+        app: await BuildableIOSLikeApp.fromProject(mockIosProject),
       );
 
       final List<String> lines = await logReader.logLines.toList();
@@ -964,13 +964,13 @@ flutter:
   });
 }
 
-class AbsoluteBuildableIOSApp extends BuildableIOSApp {
-  AbsoluteBuildableIOSApp(IosProject project, String projectBundleId) :
+class AbsoluteBuildableIOSLikeApp extends BuildableIOSLikeApp {
+  AbsoluteBuildableIOSLikeApp(IosProject project, String projectBundleId) :
     super(project, projectBundleId);
 
-  static Future<AbsoluteBuildableIOSApp> fromProject(IosProject project) async {
+  static Future<AbsoluteBuildableIOSLikeApp> fromProject(IosProject project) async {
     final String projectBundleId = await project.productBundleIdentifier;
-    return AbsoluteBuildableIOSApp(project, projectBundleId);
+    return AbsoluteBuildableIOSLikeApp(project, projectBundleId);
   }
 
   @override
