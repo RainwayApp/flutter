@@ -230,6 +230,7 @@ class RunCommand extends RunCommandBase {
     bool isEmulator;
     bool anyAndroidDevices = false;
     bool anyIOSDevices = false;
+    bool anyTvOSDevices = false;
 
     if (devices == null || devices.isEmpty) {
       deviceType = 'none';
@@ -239,6 +240,7 @@ class RunCommand extends RunCommandBase {
       final TargetPlatform platform = await devices[0].targetPlatform;
       anyAndroidDevices = platform == TargetPlatform.android;
       anyIOSDevices = platform == TargetPlatform.ios;
+      anyTvOSDevices = platform == TargetPlatform.tvos;
       deviceType = getNameForTargetPlatform(platform);
       deviceOsVersion = await devices[0].sdkNameAndVersion;
       isEmulator = await devices[0].isLocalEmulator;
@@ -250,7 +252,8 @@ class RunCommand extends RunCommandBase {
         final TargetPlatform platform = await device.targetPlatform;
         anyAndroidDevices = anyAndroidDevices || (platform == TargetPlatform.android);
         anyIOSDevices = anyIOSDevices || (platform == TargetPlatform.ios);
-        if (anyAndroidDevices && anyIOSDevices) {
+        anyTvOSDevices = anyTvOSDevices || (platform == TargetPlatform.tvos);
+        if (anyAndroidDevices && anyIOSDevices && anyTvOSDevices) {
           break;
         }
       }
@@ -265,6 +268,16 @@ class RunCommand extends RunCommandBase {
         androidEmbeddingVersion = androidProject.getEmbeddingVersion().toString().split('.').last;
       }
     }
+    if (anyTvOSDevices) {
+      final TvosProject tvosProject = FlutterProject.current().tvos;
+      if (tvosProject != null && tvosProject.exists) {
+        final Iterable<File> swiftFiles = tvosProject.hostAppRoot
+            .listSync(recursive: true, followLinks: false)
+            .whereType<File>()
+            .where((File file) => globals.fs.path.extension(file.path) == '.swift');
+        hostLanguage.add(swiftFiles.isNotEmpty ? 'swift' : 'objc');
+      }
+    }
     if (anyIOSDevices) {
       final IosProject iosProject = FlutterProject.current().ios;
       if (iosProject != null && iosProject.exists) {
@@ -274,7 +287,6 @@ class RunCommand extends RunCommandBase {
             .where((File file) => globals.fs.path.extension(file.path) == '.swift');
         hostLanguage.add(swiftFiles.isNotEmpty ? 'swift' : 'objc');
       }
-      // TODO tvos
     }
 
     final String modeName = getBuildInfo().modeName;

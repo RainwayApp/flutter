@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 
 import '../application_package.dart';
@@ -27,10 +28,12 @@ import 'code_signing.dart';
 import 'ios_workflow.dart';
 import 'mac.dart';
 
-class IOSDeploy {
-  const IOSDeploy();
+abstract class IOSLikeDeploy {
+  const IOSLikeDeploy();
 
-  static IOSDeploy get instance => context.get<IOSDeploy>();
+  Artifact get artifact;
+  TargetPlatform get targetPlatform;
+  String get platformName;
 
   /// Installs and runs the specified app bundle using ios-deploy, then returns
   /// the exit code.
@@ -39,9 +42,9 @@ class IOSDeploy {
     @required String bundlePath,
     @required List<String> launchArguments,
   }) async {
-    final String iosDeployPath = globals.artifacts.getArtifactPath(Artifact.iosDeploy, platform: TargetPlatform.ios);
+    final String iosLikeDeployPath = globals.artifacts.getArtifactPath(artifact, platform: targetPlatform);
     final List<String> launchCommand = <String>[
-      iosDeployPath,
+      iosLikeDeployPath,
       '--id',
       deviceId,
       '--bundle',
@@ -61,15 +64,15 @@ class IOSDeploy {
     // python at the front of the path, which may not include package 'six'.
     // Ensure that we pick up the system install of python, which does include
     // it.
-    final Map<String, String> iosDeployEnv = Map<String, String>.from(globals.platform.environment);
-    iosDeployEnv['PATH'] = '/usr/bin:${iosDeployEnv['PATH']}';
-    iosDeployEnv.addEntries(<MapEntry<String, String>>[globals.cache.dyLdLibEntry]);
+    final Map<String, String> iosLikeDeployEnv = Map<String, String>.from(globals.platform.environment);
+    iosLikeDeployEnv['PATH'] = '/usr/bin:${iosLikeDeployEnv['PATH']}';
+    iosLikeDeployEnv.addEntries(<MapEntry<String, String>>[globals.cache.dyLdLibEntry]);
 
     return await processUtils.stream(
       launchCommand,
       mapFunction: _monitorInstallationFailure,
       trace: true,
-      environment: iosDeployEnv,
+      environment: iosLikeDeployEnv,
     );
   }
 
@@ -92,13 +95,29 @@ Your device is locked. Unlock your device first before running.
 Error launching app. Try launching from within Xcode via:
     open ios/Runner.xcworkspace
 
-Your Xcode version may be too old for your iOS version.
+Your Xcode version may be too old for your $platformName version.
 ═══════════════════════════════════════════════════════════════════════════════════''',
       emphasis: true);
     }
 
     return stdout;
   }
+}
+
+class IOSDeploy extends IOSLikeDeploy {
+  const IOSDeploy();
+  static IOSDeploy get instance => context.get<IOSDeploy>();
+  @override Artifact get artifact => Artifact.iosDeploy;
+  @override TargetPlatform get targetPlatform => TargetPlatform.ios;
+  @override String get platformName => 'iOS';
+}
+
+class TvOSDeploy extends IOSLikeDeploy {
+  const TvOSDeploy();
+  static TvOSDeploy get instance => context.get<TvOSDeploy>();
+  @override Artifact get artifact => Artifact.iosDeploy; // TODO lynn ??
+  @override TargetPlatform get targetPlatform => TargetPlatform.tvos;
+  @override String get platformName => 'tvOS';
 }
 
 class IOSDevices extends PollingDeviceDiscovery {
@@ -111,16 +130,29 @@ class IOSDevices extends PollingDeviceDiscovery {
   bool get canListAnything => iosWorkflow.canListDevices;
 
   @override
-  Future<List<Device>> pollingGetDevices() => IOSDevice.getAttachedDevices();
+  Future<List<Device>> pollingGetDevices() => IOSDevice.getAttachedDevices(XcodePlatform.ios);
+}
+
+class TvOSDevices extends PollingDeviceDiscovery {
+  TvOSDevices() : super('tvOS devices');
+
+  @override
+  bool get supportsPlatform => globals.platform.isMacOS;
+
+  @override
+  bool get canListAnything => iosWorkflow.canListDevices;
+
+  @override
+  Future<List<Device>> pollingGetDevices() => IOSDevice.getAttachedDevices(XcodePlatform.tvos);
 }
 
 class IOSDevice extends Device {
-  IOSDevice(String id, { this.name, String sdkVersion })
+  IOSDevice(String id, this.platform, { this.name, String sdkVersion })
       : _sdkVersion = sdkVersion,
         super(
           id,
           category: Category.mobile,
-          platformType: PlatformType.ios,
+          platformType: xcodeToPlatformType(platform),
           ephemeral: true,
       ) {
     if (!globals.platform.isMacOS) {
@@ -136,6 +168,8 @@ class IOSDevice extends Device {
       platform: TargetPlatform.ios,
     );
   }
+
+  final XcodePlatform platform;
 
   String _installerPath;
   String _iproxyPath;
@@ -170,7 +204,7 @@ class IOSDevice extends Device {
   @override
   bool get supportsStartPaused => false;
 
-  static Future<List<IOSDevice>> getAttachedDevices() async {
+  static Future<List<IOSDevice>> getAttachedDevices(XcodePlatform forPlatform) async {
     if (!globals.platform.isMacOS) {
       throw UnsupportedError('Control of iOS devices or simulators only supported on Mac OS.');
     }
@@ -186,9 +220,13 @@ class IOSDevice extends Device {
       }
 
       try {
+        final String productName = await iMobileDevice.getInfoForDevice(id, 'ProductName');
+        final XcodePlatform platform = productName == 'Apple TVOS' ? XcodePlatform.tvos : XcodePlatform.ios;
         final String deviceName = await iMobileDevice.getInfoForDevice(id, 'DeviceName');
         final String sdkVersion = await iMobileDevice.getInfoForDevice(id, 'ProductVersion');
-        devices.add(IOSDevice(id, name: deviceName, sdkVersion: sdkVersion));
+        if (platform == forPlatform) {
+          devices.add(IOSDevice(id, platform, name: deviceName, sdkVersion: sdkVersion));
+        }
       } on IOSDeviceNotFoundError catch (error) {
         // Unable to find device with given udid. Possibly a network device.
         globals.printTrace('Error getting attached iOS device: $error');
@@ -368,7 +406,7 @@ class IOSDevice extends Device {
           ipv6: ipv6,
         );
       }
-      final int installationResult = await IOSDeploy.instance.runApp(
+      final int installationResult = await (platform == XcodePlatform.ios ? IOSDeploy.instance : TvOSDeploy.instance).runApp(
         deviceId: id,
         bundlePath: bundle.path,
         launchArguments: launchArguments,
@@ -431,10 +469,10 @@ class IOSDevice extends Device {
   }
 
   @override
-  Future<TargetPlatform> get targetPlatform async => TargetPlatform.ios;
+  Future<TargetPlatform> get targetPlatform async => xcodeToTargetPlatform(platform);
 
   @override
-  Future<String> get sdkNameAndVersion async => 'iOS $_sdkVersion';
+  Future<String> get sdkNameAndVersion async => '$platform $_sdkVersion';
 
   @override
   DeviceLogReader getLogReader({ IOSLikeApp app }) {
@@ -469,7 +507,7 @@ class IOSDevice extends Device {
 
   @override
   bool isSupportedForProject(FlutterProject flutterProject) {
-    return flutterProject.ios.existsSync();
+    return flutterProject.xcodeSubproject(platform).existsSync();
   }
 
   @override

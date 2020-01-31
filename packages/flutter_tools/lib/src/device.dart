@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 
 import 'android/android_device.dart';
@@ -50,6 +51,7 @@ class PlatformType {
   static const PlatformType web = PlatformType._('web');
   static const PlatformType android = PlatformType._('android');
   static const PlatformType ios = PlatformType._('ios');
+  static const PlatformType tvos = PlatformType._('tvos');
   static const PlatformType linux = PlatformType._('linux');
   static const PlatformType macos = PlatformType._('macos');
   static const PlatformType windows = PlatformType._('windows');
@@ -71,6 +73,8 @@ class DeviceManager {
     AndroidDevices(),
     IOSDevices(),
     IOSSimulators(),
+    TvOSDevices(),
+    // TvOSSimulators(),  // TODO lynn
     FuchsiaDevices(),
     FlutterTesterDevices(),
     MacOSDevices(),
@@ -341,6 +345,7 @@ abstract class Device {
       case TargetPlatform.android_x86:
         return true;
       case TargetPlatform.ios:
+      case TargetPlatform.tvos:
       case TargetPlatform.darwin_x64:
       case TargetPlatform.linux_x64:
       case TargetPlatform.windows_x64:
@@ -462,7 +467,7 @@ abstract class Device {
       String supportIndicator = device.isSupported() ? '' : ' (unsupported)';
       final TargetPlatform targetPlatform = await device.targetPlatform;
       if (await device.isLocalEmulator) {
-        final String type = targetPlatform == TargetPlatform.ios ? 'simulator' : 'emulator';
+        final String type = targetPlatform == TargetPlatform.ios || targetPlatform == TargetPlatform.tvos ? 'simulator' : 'emulator';
         supportIndicator += ' ($type)';
       }
       table.add(<String>[

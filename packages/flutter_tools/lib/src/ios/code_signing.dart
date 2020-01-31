@@ -106,7 +106,7 @@ Future<Map<String, String>> getCodeSigningIdentityDevelopmentTeam({
   // continue with that.
   if (isNotEmpty(buildSettings['DEVELOPMENT_TEAM'])) {
     globals.printStatus(
-      'Automatically signing iOS for device deployment using specified development '
+      'Automatically signing ${iosLikeApp.project.platformName} for device deployment using specified development '
       'team in Xcode project: ${buildSettings['DEVELOPMENT_TEAM']}'
     );
     return null;

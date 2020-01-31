@@ -17,6 +17,7 @@ import '../base/process.dart';
 import '../base/utils.dart';
 import '../build_info.dart';
 import '../cache.dart';
+import '../device.dart';
 import '../flutter_manifest.dart';
 import '../globals.dart' as globals;
 import '../project.dart';
@@ -51,6 +52,19 @@ Artifact xcodeToFrameworkArtifact(XcodePlatform xcodePlatform) {
       return Artifact.flutterFramework;
     case XcodePlatform.macos:
       return Artifact.flutterMacOSFramework;
+    default:
+      throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
+  }
+}
+
+PlatformType xcodeToPlatformType(XcodePlatform xcodePlatform) {
+  switch (xcodePlatform) {
+    case XcodePlatform.ios:
+      return PlatformType.ios;
+    case XcodePlatform.macos:
+      return PlatformType.macos;
+    case XcodePlatform.tvos:
+      return PlatformType.tvos;
     default:
       throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
   }
