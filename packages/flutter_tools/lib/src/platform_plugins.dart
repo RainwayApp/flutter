@@ -202,7 +202,7 @@ class TvOSPlugin extends PluginPlatform {
     return yaml['pluginClass'] is String;
   }
 
-  static const String kConfigKey = 'tvos';
+  static const String kConfigKey = 'ios';
 
   final String name;
 
