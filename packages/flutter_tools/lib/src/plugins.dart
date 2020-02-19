@@ -650,6 +650,9 @@ const String _objcPluginRegistryHeaderTemplate = '''//
 
 NS_ASSUME_NONNULL_BEGIN
 
+@interface BlacklistedPlugin : NSObject<FlutterPlugin>
+@end
+
 @interface GeneratedPluginRegistrant : NSObject
 + (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry;
 @end
@@ -664,8 +667,21 @@ const String _objcPluginRegistryImplementationTemplate = '''//
 
 #import "GeneratedPluginRegistrant.h"
 
+// TODO: this file is not yet automatically generated (it only exists in Rainway).
+#import "../tvos_blacklist.h"
+
+@implementation BlacklistedPlugin
++ (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
+}
+- (void)handleMethodCall:(FlutterMethodCall*)call result:(FlutterResult)result {
+  result(nil);
+}
+@end
+
 {{#plugins}}
-#if __has_include(<{{name}}/{{class}}.h>)
+#if defined(TVOS_BLACKLIST_{{name}})
+typedef BlacklistedPlugin {{prefix}}{{class}};
+#elif __has_include(<{{name}}/{{class}}.h>)
 #import <{{name}}/{{class}}.h>
 #else
 @import {{name}};
