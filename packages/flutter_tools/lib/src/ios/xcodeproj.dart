@@ -207,7 +207,7 @@ List<String> _xcodeBuildSettingsLines({
   xcodeBuildSettings.add('FLUTTER_BUILD_DIR=${buildDirOverride ?? getBuildDirectory()}');
 
   if (setSymroot) {
-    xcodeBuildSettings.add('SYMROOT=\${SOURCE_ROOT}/../${getIosBuildDirectory()}');
+    xcodeBuildSettings.add('SYMROOT=\${SOURCE_ROOT}/../${(project as IosLikeProject).buildDirectory}');
   }
 
   if (!project.isModule) {

@@ -330,8 +330,8 @@ abstract class XcodeBasedProject {
 
 /// Represents the iOS or tvOS sub-project of a Flutter project.
 ///
-/// Instances will reflect the contents of the `tvos/` sub-folder of
-/// Flutter applications and the `.tvos/` sub-folder of Flutter module projects.
+/// Instances will reflect the contents of the `ios/` or `tvos/` sub-folder of
+/// Flutter applications and the `.ios/` or `.tvos/` sub-folder of Flutter module projects.
 abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBasedProject {
   IosLikeProject.fromFlutter(this.parent);
 
