@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 
 import '../application_package.dart';
@@ -436,6 +437,7 @@ class IOSSimulator extends Device {
       buildInfo: debugBuildInfo,
       targetOverride: mainPath,
       buildForDevice: false,
+      platform: XcodePlatform.ios,
     );
     if (!buildResult.success) {
       throwToolExit('Could not build the application for the simulator.');

@@ -668,7 +668,9 @@ const String _objcPluginRegistryImplementationTemplate = '''//
 #import "GeneratedPluginRegistrant.h"
 
 // TODO: this file is not yet automatically generated (it only exists in Rainway).
-#import "../tvos_blacklist.h"
+#if TARGET_OS_TV
+#import "tvos_blacklist.h"
+#endif
 
 @implementation BlacklistedPlugin
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {

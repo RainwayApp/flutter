@@ -4,6 +4,8 @@
 
 import 'dart:async';
 
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
+
 import '../application_package.dart';
 import '../base/common.dart';
 import '../base/utils.dart';
@@ -81,6 +83,7 @@ class BuildTvOSCommand extends BuildSubCommand {
       targetOverride: targetFile,
       buildForDevice: !forSimulator,
       codesign: shouldCodesign,
+      platform: XcodePlatform.tvos,
     );
 
     if (!result.success) {

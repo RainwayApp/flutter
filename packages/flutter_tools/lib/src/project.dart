@@ -326,6 +326,8 @@ abstract class XcodeBasedProject {
 
   /// Directory containing symlinks to pub cache plugins source generated on `pod install`.
   Directory get symlinks;
+
+  String get runnerTargetName;
 }
 
 /// Represents the iOS or tvOS sub-project of a Flutter project.
@@ -364,8 +366,10 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
   /// a Flutter module with an editable host app.
   Directory get _flutterLibRoot => isModule ? ephemeralDirectory : _editableDirectory;
 
-  /// The bundle name of the host app, `Runner.app`.
-  String get hostAppBundleName => '$_hostAppBundleName.app';
+  Directory get _flutterLibDirectory => _flutterLibRoot.childDirectory(flutterLibDirectoryName);
+
+  /// The bundle name of the host app, `Runner.app` or `Runner-tvos.app`.
+  String get hostAppBundleName => '$runnerTargetName.app';
 
   /// True, if the parent Flutter project is a module project.
   bool get isModule => parent.isModule;
@@ -374,10 +378,10 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
   bool get exists => hostAppRoot.existsSync();
 
   @override
-  File xcodeConfigFor(String mode) => _flutterLibRoot.childDirectory('Flutter').childFile('$mode.xcconfig');
+  File xcodeConfigFor(String mode) => _flutterLibDirectory.childFile('$mode.xcconfig');
 
   @override
-  File get generatedEnvironmentVariableExportScript => _flutterLibRoot.childDirectory('Flutter').childFile('flutter_export_environment.sh');
+  File get generatedEnvironmentVariableExportScript => _flutterLibDirectory.childFile('flutter_export_environment.sh');
 
   @override
   File get podfile => hostAppRoot.childFile('Podfile');
@@ -543,12 +547,12 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
         mode: BuildMode.debug,
       ));
       if (framework.existsSync()) {
-        final File podspec = framework.parent.childFile('Flutter.podspec');
+        final File podspec = framework.parent.childFile('$flutterLibDirectoryName.podspec');
         fsUtils.copyDirectorySync(
           framework,
           engineDest.childDirectory('Flutter.framework'),
         );
-        podspec.copySync(engineDest.childFile('Flutter.podspec').path);
+        podspec.copySync(engineDest.childFile('$flutterLibDirectoryName.podspec').path);
       }
     }
   }
@@ -580,15 +584,11 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
   }
 
   @override
-  File get generatedXcodePropertiesFile => _flutterLibRoot
-    .childDirectory('Flutter')
-    .childFile('Generated.xcconfig');
+  File get generatedXcodePropertiesFile => _flutterLibDirectory.childFile('Generated.xcconfig');
 
   Directory get pluginRegistrantHost {
     return isModule
-        ? _flutterLibRoot
-            .childDirectory('Flutter')
-            .childDirectory('FlutterPluginRegistrant')
+        ? _flutterLibDirectory.childDirectory('FlutterPluginRegistrant')
         : hostAppRoot.childDirectory(_hostAppBundleName);
   }
 
@@ -613,6 +613,7 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
   String get buildFolder;
   String get buildDirectory;
   String get platformName;
+  String get flutterLibDirectoryName;
   XcodePlatform get xcodePlatform;
 }
 
@@ -635,7 +636,13 @@ class IosProject extends IosLikeProject {
   String get platformName => 'iOS';
 
   @override
+  String get flutterLibDirectoryName => 'Flutter';
+
+  @override
   XcodePlatform get xcodePlatform => XcodePlatform.ios;
+
+  @override
+  String get runnerTargetName => 'Runner';
 }
 
 class TvosProject extends IosLikeProject {
@@ -648,7 +655,7 @@ class TvosProject extends IosLikeProject {
   String get deviceSdkName => 'appletvos';
 
   @override
-  String get buildFolder => 'tvos';
+  String get buildFolder => 'ios';
 
   @override
   String get buildDirectory => getTvosBuildDirectory();
@@ -657,7 +664,13 @@ class TvosProject extends IosLikeProject {
   String get platformName => 'tvOS';
 
   @override
+  String get flutterLibDirectoryName => 'Flutter-tvos';
+
+  @override
   XcodePlatform get xcodePlatform => XcodePlatform.tvos;
+
+  @override
+  String get runnerTargetName => 'Runner-tvos';
 }
 
 /// Represents the Android sub-project of a Flutter project.
@@ -918,6 +931,9 @@ class MacOSProject extends FlutterProjectPlatform implements XcodeBasedProject {
   String get pluginConfigKey => MacOSPlugin.kConfigKey;
 
   static const String _hostAppBundleName = 'Runner';
+
+  @override
+  String get runnerTargetName => _hostAppBundleName;
 
   @override
   bool existsSync() => _macOSDirectory.existsSync();

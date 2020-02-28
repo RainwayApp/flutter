@@ -564,7 +564,7 @@ String getIosBuildDirectory() {
 
 /// Returns the iOS build output directory.
 String getTvosBuildDirectory() {
-  return globals.fs.path.join(getBuildDirectory(), 'tvos');
+  return globals.fs.path.join(getBuildDirectory(), 'ios');
 }
 
 /// Returns the macOS build output directory.

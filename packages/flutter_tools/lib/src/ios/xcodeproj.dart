@@ -194,6 +194,9 @@ List<String> _xcodeBuildSettingsLines({
 
   final String flutterRoot = globals.fs.path.normalize(Cache.flutterRoot);
   xcodeBuildSettings.add('FLUTTER_ROOT=$flutterRoot');
+  
+  final String flutterLibDirName = xcodePlatform == XcodePlatform.tvos ? 'Flutter-tvos' : 'Flutter';
+  xcodeBuildSettings.add('FLUTTER_LIB_DIR_NAME=$flutterLibDirName');
 
   // This holds because requiresProjectRoot is true for this command
   xcodeBuildSettings.add('FLUTTER_APPLICATION_PATH=${globals.fs.path.normalize(project.directory.path)}');
@@ -207,7 +210,7 @@ List<String> _xcodeBuildSettingsLines({
   xcodeBuildSettings.add('FLUTTER_BUILD_DIR=${buildDirOverride ?? getBuildDirectory()}');
 
   if (setSymroot) {
-    xcodeBuildSettings.add('SYMROOT=\${SOURCE_ROOT}/../${(project as IosLikeProject).buildDirectory}');
+    xcodeBuildSettings.add('SYMROOT=\${SOURCE_ROOT}/../${(project.xcodeSubproject(xcodePlatform) as IosLikeProject).buildDirectory}');
   }
 
   if (!project.isModule) {

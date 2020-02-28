@@ -441,7 +441,6 @@ class ApplicationPackageStore {
         iOS ??= await IOSLikeApp.fromIosProject(FlutterProject.current().ios);
         return iOS;
       case TargetPlatform.tvos:
-        print(tvOS);
         tvOS ??= await IOSLikeApp.fromTvosProject(FlutterProject.current().tvos);
         return tvOS;
       case TargetPlatform.fuchsia_arm64:

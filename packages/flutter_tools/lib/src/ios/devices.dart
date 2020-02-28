@@ -336,6 +336,7 @@ class IOSDevice extends Device {
           targetOverride: mainPath,
           buildForDevice: true,
           activeArch: iosArch,
+          platform: platform,
       );
       if (!buildResult.success) {
         globals.printError('Could not build the precompiled application for the device.');
@@ -355,7 +356,7 @@ class IOSDevice extends Device {
     // Step 2: Check that the application exists at the specified path.
     final Directory bundle = globals.fs.directory(package.deviceBundlePath);
     if (!bundle.existsSync()) {
-      globals.printError('Could not find the built application bundle at ${bundle.path}.');
+      globals.printError('Could $bundle $package ${package.deviceBundlePath} not find the built application bundle at ${bundle.path}.');
       return LaunchResult.failed();
     }
 

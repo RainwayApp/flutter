@@ -46,9 +46,9 @@ BuildApp() {
     target_path="${FLUTTER_TARGET}"
   fi
 
-  local derived_dir="${SOURCE_ROOT}/Flutter"
+  local derived_dir="${SOURCE_ROOT}/${FLUTTER_LIB_DIR_NAME}"
   if [[ -e "${project_path}/.ios" ]]; then
-    derived_dir="${project_path}/.ios/Flutter"
+    derived_dir="${project_path}/.ios/${FLUTTER_LIB_DIR_NAME}"
   fi
 
   # Default value of assets_path is flutter_assets
@@ -363,11 +363,11 @@ EmbedFlutterFrameworks() {
 
   # Prefer the hidden .ios folder, but fallback to a visible ios folder if .ios
   # doesn't exist.
-  local flutter_ios_out_folder="${FLUTTER_APPLICATION_PATH}/.ios/Flutter"
-  local flutter_ios_engine_folder="${FLUTTER_APPLICATION_PATH}/.ios/Flutter/engine"
+  local flutter_ios_out_folder="${FLUTTER_APPLICATION_PATH}/.ios/${FLUTTER_LIB_DIR_NAME}"
+  local flutter_ios_engine_folder="${FLUTTER_APPLICATION_PATH}/.ios/${FLUTTER_LIB_DIR_NAME}/engine"
   if [[ ! -d ${flutter_ios_out_folder} ]]; then
-    flutter_ios_out_folder="${FLUTTER_APPLICATION_PATH}/ios/Flutter"
-    flutter_ios_engine_folder="${FLUTTER_APPLICATION_PATH}/ios/Flutter"
+    flutter_ios_out_folder="${FLUTTER_APPLICATION_PATH}/ios/${FLUTTER_LIB_DIR_NAME}"
+    flutter_ios_engine_folder="${FLUTTER_APPLICATION_PATH}/ios/${FLUTTER_LIB_DIR_NAME}"
   fi
 
   AssertExists "${flutter_ios_out_folder}"

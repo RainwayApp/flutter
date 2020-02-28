@@ -265,7 +265,7 @@ Future<XcodeBuildResult> buildXcodeProject({
   bool buildForDevice,
   DarwinArch activeArch,
   bool codesign = true,
-
+  XcodePlatform platform,
 }) async {
   if (!upgradePbxProjWithFlutterAssets(app.project)) {
     return XcodeBuildResult(success: false);
@@ -285,7 +285,11 @@ Future<XcodeBuildResult> buildXcodeProject({
     globals.printError('  open $buildFolder/Runner.xcworkspace');
     return XcodeBuildResult(success: false);
   }
-  final String scheme = projectInfo.schemeFor(buildInfo);
+  String scheme = projectInfo.schemeFor(buildInfo);
+  if (scheme == 'Runner' && platform == XcodePlatform.tvos) {
+    globals.printStatus('Applying Runner => Runner-tvos scheme name hack.');
+    scheme = 'Runner-tvos';
+  }
   if (scheme == null) {
     globals.printError('');
     if (projectInfo.definesCustomSchemes) {
