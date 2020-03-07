@@ -258,7 +258,6 @@ class CocoaPods {
   }
 
   void _addPodsDependencyToFlutterXcconfig(XcodeBasedProject xcodeProject, String mode) {
-    globals.printStatus('_addPodsDependencyToFlutterXcconfig $xcodeProject $mode');
     final String runner = xcodeProject.runnerTargetName;
     final File file = xcodeProject.xcodeConfigFor(mode);
     if (file.existsSync()) {
