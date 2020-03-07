@@ -245,11 +245,14 @@ BuildApp() {
         -o "${derived_dir}/App.framework/App" -)"
   fi
 
-  local plistPath="${project_path}/ios/Flutter/AppFrameworkInfo.plist"
+  # TODO lynn
+  local flutter_lib_dir_name="Flutter-tvos"
+  local plistPath="${project_path}/ios/$flutter_lib_dir_name/AppFrameworkInfo.plist"
   if [[ -e "${project_path}/.ios" ]]; then
-    plistPath="${project_path}/.ios/Flutter/AppFrameworkInfo.plist"
+    plistPath="${project_path}/.ios/$flutter_lib_dir_name/AppFrameworkInfo.plist"
   fi
 
+  echo plistPath: $plistPath
   RunCommand cp -- "$plistPath" "${derived_dir}/App.framework/Info.plist"
 
   local precompilation_flag=""
