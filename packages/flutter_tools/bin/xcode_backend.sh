@@ -165,6 +165,9 @@ BuildApp() {
   fi
 
   if [[ "${build_mode}" != "debug" ]]; then
+    # This happens to be "ios" or "tvos" as we need.
+    local target_platform_short="$SWIFT_PLATFORM_TARGET_PREFIX"
+    StreamOutput " ├─target_platform_short=${target_platform_short}"
     StreamOutput " ├─Building Dart code..."
     # Transform ARCHS to comma-separated list of target architectures.
     local archs="${ARCHS// /,}"
@@ -183,7 +186,7 @@ BuildApp() {
       ${verbose_flag}                                                       \
       build aot                                                             \
       --output-dir="${build_dir}/aot"                                       \
-      --target-platform=ios                                                 \
+      --target-platform="${target_platform_short}"                          \
       --target="${target_path}"                                             \
       --${build_mode}                                                       \
       --ios-arch="${archs}"                                                 \
@@ -245,11 +248,9 @@ BuildApp() {
         -o "${derived_dir}/App.framework/App" -)"
   fi
 
-  # TODO lynn
-  local flutter_lib_dir_name="Flutter-tvos"
-  local plistPath="${project_path}/ios/$flutter_lib_dir_name/AppFrameworkInfo.plist"
+  local plistPath="${project_path}/ios/$FLUTTER_LIB_DIR_NAME/AppFrameworkInfo.plist"
   if [[ -e "${project_path}/.ios" ]]; then
-    plistPath="${project_path}/.ios/$flutter_lib_dir_name/AppFrameworkInfo.plist"
+    plistPath="${project_path}/.ios/$FLUTTER_LIB_DIR_NAME/AppFrameworkInfo.plist"
   fi
 
   echo plistPath: $plistPath
@@ -260,11 +261,14 @@ BuildApp() {
     precompilation_flag="--precompiled"
   fi
 
+  # This happens to be "ios" or "tvos" as we need.
+  local target_platform_short="$SWIFT_PLATFORM_TARGET_PREFIX"
+  StreamOutput " ├─target_platform_short=${target_platform_short}"
   StreamOutput " ├─Assembling Flutter resources..."
   RunCommand "${FLUTTER_ROOT}/bin/flutter"     \
     ${verbose_flag}                                                         \
     build bundle                                                            \
-    --target-platform=ios                                                   \
+    --target-platform="${target_platform_short}"                            \
     --target="${target_path}"                                               \
     --${build_mode}                                                         \
     --depfile="${build_dir}/snapshot_blob.bin.d"                            \

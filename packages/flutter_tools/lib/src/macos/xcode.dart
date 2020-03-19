@@ -19,6 +19,8 @@ Xcode get xcode => context.get<Xcode>();
 enum SdkType {
   iPhone,
   iPhoneSimulator,
+  appleTv,
+  appleTvSimulator,
   macOS,
 }
 
@@ -34,6 +36,10 @@ String getNameForSdk(SdkType sdk) {
       return 'iphoneos';
     case SdkType.iPhoneSimulator:
       return 'iphonesimulator';
+    case SdkType.appleTv:
+      return 'appletvos';
+    case SdkType.appleTvSimulator:
+      return 'appletvsimulator';
     case SdkType.macOS:
       return 'macosx';
   }

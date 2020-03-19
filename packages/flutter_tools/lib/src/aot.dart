@@ -56,8 +56,8 @@ class AotBuilder {
     }
 
     if (bitcode) {
-      if (platform != TargetPlatform.ios) {
-        throwToolExit('Bitcode is only supported on iOS (TargetPlatform is $platform).');
+      if (platform != TargetPlatform.ios && platform != TargetPlatform.tvos) {
+        throwToolExit('Bitcode is only supported on iOS and tvOS (TargetPlatform is $platform).');
       }
       await validateBitcode(buildMode, platform);
     }
@@ -90,7 +90,7 @@ class AotBuilder {
       }
 
       // Build AOT snapshot.
-      if (platform == TargetPlatform.ios) {
+      if (platform == TargetPlatform.ios || platform == TargetPlatform.tvos) {
         // Determine which iOS architectures to build for.
         final Map<DarwinArch, String> iosBuilds = <DarwinArch, String>{};
         for (final DarwinArch arch in iosBuildArchs) {
@@ -181,6 +181,7 @@ class AotBuilder {
       case TargetPlatform.darwin_x64:
       case TargetPlatform.android_x64:
       case TargetPlatform.ios:
+      case TargetPlatform.tvos:
       case TargetPlatform.linux_x64:
       case TargetPlatform.windows_x64:
       case TargetPlatform.fuchsia_arm64:

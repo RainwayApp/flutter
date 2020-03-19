@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 
 import '../artifacts.dart';
@@ -96,7 +97,8 @@ class AOTSnapshotter {
     @required bool bitcode,
     bool quiet = false,
   }) async {
-    if (bitcode && platform != TargetPlatform.ios) {
+    final bool isIosOrTvos = platform == TargetPlatform.ios || platform == TargetPlatform.tvos;
+    if (bitcode && !isIosOrTvos) {
       globals.printError('Bitcode is only supported for iOS.');
       return 1;
     }
@@ -106,7 +108,7 @@ class AOTSnapshotter {
       return 1;
     }
     // TODO(cbracken): replace IOSArch with TargetPlatform.ios_{armv7,arm64}.
-    assert(platform != TargetPlatform.ios || darwinArch != null);
+    assert(!isIosOrTvos || darwinArch != null);
 
     final PackageMap packageMap = PackageMap(packagesPath);
     final String packageMapError = packageMap.checkValid();
@@ -133,7 +135,7 @@ class AOTSnapshotter {
     }
 
     final String assembly = globals.fs.path.join(outputDir.path, 'snapshot_assembly.S');
-    if (platform == TargetPlatform.ios || platform == TargetPlatform.darwin_x64) {
+    if (isIosOrTvos || platform == TargetPlatform.darwin_x64) {
       // Assembly AOT snapshot.
       outputPaths.add(assembly);
       genSnapshotArgs.add('--snapshot_kind=app-aot-assembly');
@@ -182,7 +184,7 @@ class AOTSnapshotter {
     // is resolved.
     // The DWARF section confuses Xcode tooling, so this strips it. Ideally,
     // gen_snapshot would provide an argument to do this automatically.
-    final bool stripSymbols = platform == TargetPlatform.ios && buildMode == BuildMode.release && bitcode;
+    final bool stripSymbols = isIosOrTvos && buildMode == BuildMode.release && bitcode;
     if (stripSymbols) {
       final IOSink sink = globals.fs.file('$assembly.stripped.S').openWrite();
       for (final String line in globals.fs.file(assembly).readAsLinesSync()) {
@@ -201,12 +203,13 @@ class AOTSnapshotter {
     final String genSnapshotPath = GenSnapshot.getSnapshotterPath(snapshotType);
     outputDir.childFile('gen_snapshot.d').writeAsStringSync('gen_snapshot.d: $genSnapshotPath\n');
 
-    // On iOS and macOS, we use Xcode to compile the snapshot into a dynamic library that the
+    // On iOS, tvOS, and macOS, we use Xcode to compile the snapshot into a dynamic library that the
     // end-developer can link into their app.
-    if (platform == TargetPlatform.ios || platform == TargetPlatform.darwin_x64) {
+    final xcodePlatform = targetToXcodePlatform(platform);
+    if (xcodePlatform != null) {
       final RunResult result = await _buildFramework(
         appleArch: darwinArch,
-        isIOS: platform == TargetPlatform.ios,
+        xcodePlatform: xcodePlatform,
         assemblyPath: stripSymbols ? '$assembly.stripped.S' : assembly,
         outputPath: outputDir.path,
         bitcode: bitcode,
@@ -223,7 +226,7 @@ class AOTSnapshotter {
   /// source at [assemblyPath].
   Future<RunResult> _buildFramework({
     @required DarwinArch appleArch,
-    @required bool isIOS,
+    @required XcodePlatform xcodePlatform,
     @required String assemblyPath,
     @required String outputPath,
     @required bool bitcode,
@@ -234,19 +237,23 @@ class AOTSnapshotter {
       globals.printStatus('Building App.framework for $targetArch...');
     }
 
+    final bool isIos = xcodePlatform == XcodePlatform.ios;
+    final bool isTvos = xcodePlatform == XcodePlatform.tvos;
+
     final List<String> commonBuildOptions = <String>[
       '-arch', targetArch,
-      if (isIOS)
-        '-miphoneos-version-min=8.0',
+      if (isIos) '-miphoneos-version-min=8.0',
+      if (isTvos) '-mappletvos-version-min=9.0',
     ];
 
     const String embedBitcodeArg = '-fembed-bitcode';
     final String assemblyO = globals.fs.path.join(outputPath, 'snapshot_assembly.o');
     List<String> isysrootArgs;
-    if (isIOS) {
-      final String iPhoneSDKLocation = await xcode.sdkLocation(SdkType.iPhone);
-      if (iPhoneSDKLocation != null) {
-        isysrootArgs = <String>['-isysroot', iPhoneSDKLocation];
+    if (isIos || isTvos) {
+      final SdkType sdk = xcodePlatformToSdkType(xcodePlatform);
+      final String sdkLocation = await xcode.sdkLocation(sdk);
+      if (sdkLocation != null) {
+        isysrootArgs = <String>['-isysroot', sdkLocation];
       }
     }
     final RunResult compileResult = await xcode.cc(<String>[
@@ -344,6 +351,7 @@ class AOTSnapshotter {
       TargetPlatform.android_arm64,
       TargetPlatform.android_x64,
       TargetPlatform.ios,
+      TargetPlatform.tvos,
       TargetPlatform.darwin_x64,
     ].contains(platform);
   }

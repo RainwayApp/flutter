@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'package:flutter_tools/src/macos/xcode.dart';
 import 'package:meta/meta.dart';
 
 import '../artifacts.dart';
@@ -45,6 +46,22 @@ TargetPlatform xcodeToTargetPlatform(XcodePlatform xcodePlatform) {
   }
 }
 
+/// Turn a [TargetPlatform] into an [XcodePlatform].
+///
+/// Returns null if this is not an Xcode platform.
+XcodePlatform targetToXcodePlatform(TargetPlatform targetPlatform) {
+  switch (targetPlatform) {
+    case TargetPlatform.ios:
+      return XcodePlatform.ios;
+    case TargetPlatform.darwin_x64:
+      return XcodePlatform.macos;
+    case TargetPlatform.tvos:
+      return XcodePlatform.tvos;
+    default:
+      return null;
+  }
+}
+
 Artifact xcodeToFrameworkArtifact(XcodePlatform xcodePlatform) {
   switch (xcodePlatform) {
     case XcodePlatform.ios:
@@ -65,6 +82,32 @@ PlatformType xcodeToPlatformType(XcodePlatform xcodePlatform) {
       return PlatformType.macos;
     case XcodePlatform.tvos:
       return PlatformType.tvos;
+    default:
+      throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
+  }
+}
+
+SdkType xcodePlatformToSdkType(XcodePlatform xcodePlatform) {
+  switch (xcodePlatform) {
+    case XcodePlatform.ios:
+      return SdkType.iPhone;
+    case XcodePlatform.macos:
+      return SdkType.macOS;
+    case XcodePlatform.tvos:
+      return SdkType.appleTv;
+    default:
+      throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
+  }
+}
+
+SdkType xcodePlatformToSimulatorSdkType(XcodePlatform xcodePlatform) {
+  switch (xcodePlatform) {
+    case XcodePlatform.ios:
+      return SdkType.iPhoneSimulator;
+    case XcodePlatform.macos:
+      return SdkType.macOS;
+    case XcodePlatform.tvos:
+      return SdkType.appleTvSimulator;
     default:
       throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
   }
