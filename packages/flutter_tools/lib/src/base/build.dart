@@ -205,7 +205,7 @@ class AOTSnapshotter {
 
     // On iOS, tvOS, and macOS, we use Xcode to compile the snapshot into a dynamic library that the
     // end-developer can link into their app.
-    final xcodePlatform = targetToXcodePlatform(platform);
+    final XcodePlatform xcodePlatform = targetToXcodePlatform(platform);
     if (xcodePlatform != null) {
       final RunResult result = await _buildFramework(
         appleArch: darwinArch,

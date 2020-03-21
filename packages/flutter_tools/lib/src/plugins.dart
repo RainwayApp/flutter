@@ -845,7 +845,7 @@ Future<void> _writeTvOSPluginRegistrant(FlutterProject project, List<Plugin> plu
   final List<Map<String, dynamic>> tvosPlugins = _extractPlatformMaps(plugins, TvOSPlugin.kConfigKey);
   final Map<String, dynamic> context = <String, dynamic>{
     'os': 'tvos',
-    'deploymentTarget': '13.0',
+    'deploymentTarget': '9.0',
     'framework': 'Flutter',
     'plugins': tvosPlugins,
   };

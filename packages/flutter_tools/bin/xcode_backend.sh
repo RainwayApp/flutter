@@ -167,7 +167,7 @@ BuildApp() {
   if [[ "${build_mode}" != "debug" ]]; then
     # This happens to be "ios" or "tvos" as we need.
     local target_platform_short="$SWIFT_PLATFORM_TARGET_PREFIX"
-    StreamOutput " ├─target_platform_short=${target_platform_short}"
+    # StreamOutput " ├─target_platform_short=${target_platform_short}"
     StreamOutput " ├─Building Dart code..."
     # Transform ARCHS to comma-separated list of target architectures.
     local archs="${ARCHS// /,}"
@@ -263,7 +263,7 @@ BuildApp() {
 
   # This happens to be "ios" or "tvos" as we need.
   local target_platform_short="$SWIFT_PLATFORM_TARGET_PREFIX"
-  StreamOutput " ├─target_platform_short=${target_platform_short}"
+  # StreamOutput " ├─target_platform_short=${target_platform_short}"
   StreamOutput " ├─Assembling Flutter resources..."
   RunCommand "${FLUTTER_ROOT}/bin/flutter"     \
     ${verbose_flag}                                                         \
