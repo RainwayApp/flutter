@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:flutter_tools/src/build_info.dart';
+import 'package:flutter_tools/src/compile.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/resident_runner.dart';
 import 'package:flutter_tools/src/vmservice.dart';
@@ -18,7 +19,18 @@ void main() {
     // TODO(jacobr): make these tests run with `trackWidgetCreation: true` as
     // well as the default flags.
     return TestRunner(
-      <FlutterDevice>[FlutterDevice(MockDevice(), trackWidgetCreation: false, buildMode: BuildMode.debug)],
+      <FlutterDevice>[
+        FlutterDevice(
+          MockDevice(),
+          buildInfo: const BuildInfo(
+            BuildMode.debug,
+            null,
+            trackWidgetCreation: false,
+            treeShakeIcons: false,
+          ),
+          generator: MockResidentCompiler(),
+        ),
+      ],
     );
   }
 
@@ -98,26 +110,58 @@ void main() {
       verify(mockResidentRunner.printHelp(details: true)).called(3);
     });
 
-    testUsingContext('i, I - debugToggleWidgetInspector with service protocol', () async {
-      await terminalHandler.processTerminalInput('i');
-      await terminalHandler.processTerminalInput('I');
+    testUsingContext('k - toggles CanvasKit rendering and prints results', () async {
+      when(mockResidentRunner.supportsCanvasKit).thenReturn(true);
+      when(mockResidentRunner.toggleCanvaskit())
+        .thenAnswer((Invocation invocation) async {
+          return true;
+        });
 
-      verify(mockResidentRunner.debugToggleWidgetInspector()).called(2);
+      await terminalHandler.processTerminalInput('k');
+
+      verify(mockResidentRunner.toggleCanvaskit()).called(1);
     });
 
-    testUsingContext('i, I - debugToggleWidgetInspector without service protocol', () async {
+    testUsingContext('i - debugToggleWidgetInspector with service protocol', () async {
+      await terminalHandler.processTerminalInput('i');
+
+      verify(mockResidentRunner.debugToggleWidgetInspector()).called(1);
+    });
+
+    testUsingContext('i - debugToggleWidgetInspector without service protocol', () async {
       when(mockResidentRunner.supportsServiceProtocol).thenReturn(false);
       await terminalHandler.processTerminalInput('i');
-      await terminalHandler.processTerminalInput('I');
 
       verifyNever(mockResidentRunner.debugToggleWidgetInspector());
+    });
+
+    testUsingContext('I - debugToggleInvertOversizedImages with service protocol/debug', () async {
+      when(mockResidentRunner.isRunningDebug).thenReturn(true);
+      await terminalHandler.processTerminalInput('I');
+
+      verify(mockResidentRunner.debugToggleInvertOversizedImages()).called(1);
+    });
+
+    testUsingContext('I - debugToggleInvertOversizedImages with service protocol/ndebug', () async {
+      when(mockResidentRunner.isRunningDebug).thenReturn(false);
+      await terminalHandler.processTerminalInput('I');
+
+      verifyNever(mockResidentRunner.debugToggleInvertOversizedImages());
+    });
+
+    testUsingContext('I - debugToggleInvertOversizedImages without service protocol', () async {
+      when(mockResidentRunner.supportsServiceProtocol).thenReturn(false);
+      await terminalHandler.processTerminalInput('I');
+
     });
 
     testUsingContext('l - list flutter views', () async {
       final MockFlutterDevice mockFlutterDevice = MockFlutterDevice();
       when(mockResidentRunner.isRunningDebug).thenReturn(true);
       when(mockResidentRunner.flutterDevices).thenReturn(<FlutterDevice>[mockFlutterDevice]);
-      when(mockFlutterDevice.views).thenReturn(<FlutterView>[]);
+      when(mockResidentRunner.listFlutterViews()).thenAnswer((Invocation invocation) async {
+        return <FlutterView>[];
+      });
 
       await terminalHandler.processTerminalInput('l');
 
@@ -342,6 +386,13 @@ void main() {
       verifyNever(mockResidentRunner.debugDumpSemanticsTreeInInverseHitTestOrder());
     });
 
+    testUsingContext('v - launchDevTools', () async {
+      when(mockResidentRunner.supportsServiceProtocol).thenReturn(true);
+      await terminalHandler.processTerminalInput('v');
+
+      verify(mockResidentRunner.launchDevTools()).called(1);
+    });
+
     testUsingContext('w,W - debugDumpApp with service protocol', () async {
       await terminalHandler.processTerminalInput('w');
       await terminalHandler.processTerminalInput('W');
@@ -382,12 +433,12 @@ class MockDevice extends Mock implements Device {
 }
 
 class MockResidentRunner extends Mock implements ResidentRunner {}
-
 class MockFlutterDevice extends Mock implements FlutterDevice {}
+class MockResidentCompiler extends Mock implements ResidentCompiler {}
 
 class TestRunner extends ResidentRunner {
   TestRunner(List<FlutterDevice> devices)
-    : super(devices);
+    : super(devices, debuggingOptions: DebuggingOptions.disabled(BuildInfo.debug));
 
   bool hasHelpBeenPrinted = false;
   String receivedCommand;

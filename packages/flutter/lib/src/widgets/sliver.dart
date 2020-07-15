@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:collection' show SplayTreeMap, HashMap;
 
 import 'package:flutter/foundation.dart';
@@ -800,6 +802,8 @@ abstract class SliverMultiBoxAdaptorWidget extends SliverWithKeepAliveWidget {
 ///
 /// See also:
 ///
+///  * <https://flutter.dev/docs/development/ui/advanced/slivers>, a description
+///    of what slivers are and how to use them.
 ///  * [SliverFixedExtentList], which is more efficient for children with
 ///    the same extent in the main axis.
 ///  * [SliverPrototypeExtentList], which is similar to [SliverFixedExtentList]
@@ -1050,25 +1054,17 @@ class SliverMultiBoxAdaptorElement extends RenderObjectElement implements Render
       performRebuild();
   }
 
-  // We inflate widgets at two different times:
-  //  1. When we ourselves are told to rebuild (see performRebuild).
-  //  2. When our render object needs a new child (see createChild).
-  // In both cases, we cache the results of calling into our delegate to get the widget,
-  // so that if we do case 2 later, we don't call the builder again.
-  // Any time we do case 1, though, we reset the cache.
-
-  final Map<int, Widget> _childWidgets = HashMap<int, Widget>();
   final SplayTreeMap<int, Element> _childElements = SplayTreeMap<int, Element>();
   RenderBox _currentBeforeChild;
 
   @override
   void performRebuild() {
-    _childWidgets.clear(); // Reset the cache, as described above.
     super.performRebuild();
     _currentBeforeChild = null;
     assert(_currentlyUpdatingChildIndex == null);
     try {
       final SplayTreeMap<int, Element> newChildren = SplayTreeMap<int, Element>();
+      final Map<int, double> indexToLayoutOffset = HashMap<int, double>();
 
       void processElement(int index) {
         _currentlyUpdatingChildIndex = index;
@@ -1080,17 +1076,31 @@ class SliverMultiBoxAdaptorElement extends RenderObjectElement implements Render
         if (newChild != null) {
           _childElements[index] = newChild;
           final SliverMultiBoxAdaptorParentData parentData = newChild.renderObject.parentData as SliverMultiBoxAdaptorParentData;
+          if (index == 0) {
+            parentData.layoutOffset = 0.0;
+          } else if (indexToLayoutOffset.containsKey(index)) {
+            parentData.layoutOffset = indexToLayoutOffset[index];
+          }
           if (!parentData.keptAlive)
             _currentBeforeChild = newChild.renderObject as RenderBox;
         } else {
           _childElements.remove(index);
         }
       }
-
       for (final int index in _childElements.keys.toList()) {
         final Key key = _childElements[index].widget.key;
         final int newIndex = key == null ? null : widget.delegate.findIndexByKey(key);
+        final SliverMultiBoxAdaptorParentData childParentData =
+          _childElements[index].renderObject?.parentData as SliverMultiBoxAdaptorParentData;
+
+        if (childParentData != null && childParentData.layoutOffset != null)
+          indexToLayoutOffset[index] = childParentData.layoutOffset;
+
         if (newIndex != null && newIndex != index) {
+          // The layout offset of the child being moved is no longer accurate.
+          if (childParentData != null)
+            childParentData.layoutOffset = null;
+
           newChildren[newIndex] = _childElements[index];
           // We need to make sure the original index gets processed.
           newChildren.putIfAbsent(index, () => null);
@@ -1116,7 +1126,7 @@ class SliverMultiBoxAdaptorElement extends RenderObjectElement implements Render
   }
 
   Widget _build(int index) {
-    return _childWidgets.putIfAbsent(index, () => widget.delegate.build(this, index));
+    return widget.delegate.build(this, index);
   }
 
   @override
@@ -1160,6 +1170,7 @@ class SliverMultiBoxAdaptorElement extends RenderObjectElement implements Render
     assert(child.slot != null);
     assert(_childElements.containsKey(child.slot));
     _childElements.remove(child.slot);
+    super.forgetChild(child);
   }
 
   @override
@@ -1308,7 +1319,8 @@ class SliverMultiBoxAdaptorElement extends RenderObjectElement implements Render
           break;
       }
 
-      return parentData.layoutOffset < renderObject.constraints.scrollOffset + renderObject.constraints.remainingPaintExtent &&
+      return parentData.layoutOffset != null &&
+          parentData.layoutOffset < renderObject.constraints.scrollOffset + renderObject.constraints.remainingPaintExtent &&
           parentData.layoutOffset + itemExtent > renderObject.constraints.scrollOffset;
     }).forEach(visitor);
   }
@@ -1334,7 +1346,7 @@ class SliverMultiBoxAdaptorElement extends RenderObjectElement implements Render
 /// bool _visible = true;
 /// List<Widget> listItems = <Widget>[
 ///   Text('Now you see me,'),
-///   Text('Now you don\'t!'),
+///   Text("Now you don't!"),
 /// ];
 ///
 /// SliverOpacity(

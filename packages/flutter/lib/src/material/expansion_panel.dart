@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -37,8 +39,8 @@ class _SaltedKey<S, V> extends LocalKey {
 
   @override
   String toString() {
-    final String saltString = S == String ? '<\'$salt\'>' : '<$salt>';
-    final String valueString = V == String ? '<\'$value\'>' : '<$value>';
+    final String saltString = S == String ? "<'$salt'>" : '<$salt>';
+    final String valueString = V == String ? "<'$value'>" : '<$value>';
     return '[$saltString $valueString]';
   }
 }
@@ -140,7 +142,7 @@ class ExpansionPanelRadio extends ExpansionPanel {
 /// Note that [expansionCallback] behaves differently for [ExpansionPanelList]
 /// and [ExpansionPanelList.radio].
 ///
-/// {@tool sample --template=stateful_widget_scaffold}
+/// {@tool dartpad --template=stateful_widget_scaffold}
 ///
 /// Here is a simple example of how to implement ExpansionPanelList.
 ///
@@ -228,6 +230,7 @@ class ExpansionPanelList extends StatefulWidget {
     this.expansionCallback,
     this.animationDuration = kThemeAnimationDuration,
     this.expandedHeaderPadding = _kPanelHeaderExpandedDefaultPadding,
+    this.dividerColor,
   }) : assert(children != null),
        assert(animationDuration != null),
        _allowOnlyOnePanelOpen = false,
@@ -242,7 +245,7 @@ class ExpansionPanelList extends StatefulWidget {
   /// arguments must not be null. The [children] objects must be instances
   /// of [ExpansionPanelRadio].
   ///
-  /// {@tool sample --template=stateful_widget_scaffold}
+  /// {@tool dartpad --template=stateful_widget_scaffold}
   ///
   /// Here is a simple example of how to implement ExpansionPanelList.radio.
   ///
@@ -317,6 +320,7 @@ class ExpansionPanelList extends StatefulWidget {
     this.animationDuration = kThemeAnimationDuration,
     this.initialOpenPanelValue,
     this.expandedHeaderPadding = _kPanelHeaderExpandedDefaultPadding,
+    this.dividerColor,
   }) : assert(children != null),
        assert(animationDuration != null),
        _allowOnlyOnePanelOpen = true,
@@ -360,6 +364,12 @@ class ExpansionPanelList extends StatefulWidget {
   /// By default, 16px of space is added to the header vertically (above and below)
   /// during expansion.
   final EdgeInsets expandedHeaderPadding;
+
+  /// Defines color for the divider when [ExpansionPanel.isExpanded] is false.
+  ///
+  /// If `dividerColor` is null, then [DividerThemeData.color] is used. If that
+  /// is null, then [ThemeData.dividerColor] is used.
+  final Color dividerColor;
 
   @override
   State<StatefulWidget> createState() => _ExpansionPanelListState();
@@ -526,6 +536,7 @@ class _ExpansionPanelListState extends State<ExpansionPanelList> {
 
     return MergeableMaterial(
       hasDividers: true,
+      dividerColor: widget.dividerColor,
       children: items,
     );
   }

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:ui' as ui;
@@ -30,13 +32,13 @@ class AnnotationEntry<T> {
   /// The annotation object that is found.
   final T annotation;
 
-  /// The target location described by the local coordinate space of the layer
-  /// that contains the annotation.
+  /// The target location described by the local coordinate space of the
+  /// annotation object.
   final Offset localPosition;
 
   @override
   String toString() {
-    return '${objectRuntimeType(this, 'AnnotationEntry')}(annotation: $annotation, localPostion: $localPosition)';
+    return '${objectRuntimeType(this, 'AnnotationEntry')}(annotation: $annotation, localPosition: $localPosition)';
   }
 }
 
@@ -134,7 +136,7 @@ abstract class Layer extends AbstractNode with DiagnosticableTreeMixin {
     assert(
       !alwaysNeedsAddToScene,
       '$runtimeType with alwaysNeedsAddToScene set called markNeedsAddToScene.\n'
-      'The layer\'s alwaysNeedsAddToScene is set to true, and therefore it should not call markNeedsAddToScene.',
+      "The layer's alwaysNeedsAddToScene is set to true, and therefore it should not call markNeedsAddToScene.",
     );
 
     // Already marked. Short-circuit.
@@ -460,6 +462,7 @@ abstract class Layer extends AbstractNode with DiagnosticableTreeMixin {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty<Object>('owner', owner, level: parent != null ? DiagnosticLevel.hidden : DiagnosticLevel.info, defaultValue: null));
     properties.add(DiagnosticsProperty<dynamic>('creator', debugCreator, defaultValue: null, level: DiagnosticLevel.debug));
+    properties.add(DiagnosticsProperty<String>('engine layer', describeIdentity(_engineLayer)));
   }
 }
 
@@ -535,6 +538,11 @@ class PictureLayer extends Layer {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty<Rect>('paint bounds', canvasBounds));
+    properties.add(DiagnosticsProperty<String>('picture', describeIdentity(_picture)));
+    properties.add(DiagnosticsProperty<String>(
+      'raster cache hints',
+      'isComplex = $isComplexHint, willChange = $willChangeHint'),
+    );
   }
 
   @override
@@ -573,11 +581,12 @@ class PictureLayer extends Layer {
 class TextureLayer extends Layer {
   /// Creates a texture layer bounded by [rect] and with backend texture
   /// identified by [textureId], if [freeze] is true new texture frames will not be
-  /// populated to the texture.
+  /// populated to the texture, and use [filterQuality] to set layer's [FilterQuality].
   TextureLayer({
     @required this.rect,
     @required this.textureId,
     this.freeze = false,
+    this.filterQuality = ui.FilterQuality.low,
   }) : assert(rect != null),
        assert(textureId != null);
 
@@ -596,6 +605,9 @@ class TextureLayer extends Layer {
   /// un-freezes it when it is certain that a frame with the new size is ready.
   final bool freeze;
 
+  /// {@macro FilterQuality}
+  final ui.FilterQuality filterQuality;
+
   @override
   void addToScene(ui.SceneBuilder builder, [ Offset layerOffset = Offset.zero ]) {
     final Rect shiftedRect = layerOffset == Offset.zero ? rect : rect.shift(layerOffset);
@@ -605,6 +617,7 @@ class TextureLayer extends Layer {
       width: shiftedRect.width,
       height: shiftedRect.height,
       freeze: freeze,
+      filterQuality: filterQuality,
     );
   }
 
@@ -624,7 +637,6 @@ class PlatformViewLayer extends Layer {
   PlatformViewLayer({
     @required this.rect,
     @required this.viewId,
-    this.hoverAnnotation,
   }) : assert(rect != null),
        assert(viewId != null);
 
@@ -636,25 +648,6 @@ class PlatformViewLayer extends Layer {
   /// A UIView with this identifier must have been created by [PlatformViewsServices.initUiKitView].
   final int viewId;
 
-  /// [MouseTrackerAnnotation] that handles mouse events for this layer.
-  ///
-  /// If [hoverAnnotation] is non-null, [PlatformViewLayer] will annotate the
-  /// region of this platform view such that annotation callbacks will receive
-  /// mouse events, including mouse enter, exit, and hover, but not including
-  /// mouse down, move, and up. The layer will be treated as opaque during an
-  /// annotation search, which will prevent layers behind it from receiving
-  /// these events.
-  ///
-  /// By default, [hoverAnnotation] is null, and [PlatformViewLayer] will not
-  /// receive mouse events, and will therefore appear translucent during the
-  /// annotation search.
-  ///
-  /// See also:
-  ///
-  ///  * [MouseRegion], which explains more about the mouse events and opacity
-  ///    during annotation search.
-  final MouseTrackerAnnotation hoverAnnotation;
-
   @override
   void addToScene(ui.SceneBuilder builder, [ Offset layerOffset = Offset.zero ]) {
     final Rect shiftedRect = layerOffset == Offset.zero ? rect : rect.shift(layerOffset);
@@ -664,24 +657,6 @@ class PlatformViewLayer extends Layer {
       width: shiftedRect.width,
       height: shiftedRect.height,
     );
-  }
-
-  @override
-  @protected
-  bool findAnnotations<S>(AnnotationResult<S> result, Offset localPosition, { @required bool onlyFirst }) {
-    if (hoverAnnotation == null || !rect.contains(localPosition)) {
-      return false;
-    }
-    if (S == MouseTrackerAnnotation) {
-      final Object untypedValue = hoverAnnotation;
-      final S typedValue = untypedValue as S;
-      result.add(AnnotationEntry<S>(
-        annotation: typedValue,
-        localPosition: localPosition,
-      ));
-      return true;
-    }
-    return false;
   }
 }
 
@@ -1655,9 +1630,8 @@ class TransformLayer extends OffsetLayer {
     }
     if (_invertedTransform == null)
       return null;
-    final Vector4 vector = Vector4(localPosition.dx, localPosition.dy, 0.0, 1.0);
-    final Vector4 result = _invertedTransform.transform(vector);
-    return Offset(result[0], result[1]);
+
+    return MatrixUtils.transformPoint(_invertedTransform, localPosition);
   }
 
   @override
@@ -2465,16 +2439,15 @@ class AnnotatedRegionLayer<T> extends ContainerLayer {
   /// met.
   final T value;
 
-  /// The size of an optional clipping rectangle, used to control whether a
-  /// position is contained by the annotation.
+  /// The size of the annotated object.
   ///
-  /// If [size] is provided, then the annotation is only added if the target
+  /// If [size] is provided, then the annotation is found only if the target
   /// position is contained by the rectangle formed by [size] and [offset].
   /// Otherwise no such restriction is applied, and clipping can only be done by
   /// the ancestor layers.
   final Size size;
 
-  /// The offset of the optional clipping rectangle that is indicated by [size].
+  /// The position of the annotated object.
   ///
   /// The [offset] defaults to [Offset.zero] if not provided, and is ignored if
   /// [size] is not set.
@@ -2544,7 +2517,7 @@ class AnnotatedRegionLayer<T> extends ContainerLayer {
       final S typedValue = untypedValue as S;
       result.add(AnnotationEntry<S>(
         annotation: typedValue,
-        localPosition: localPosition,
+        localPosition: localPosition - offset,
       ));
     }
     return isAbsorbed;

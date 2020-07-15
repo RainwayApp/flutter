@@ -2,14 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
 
-class MockOnEndFunction implements Function {
+class MockOnEndFunction {
   int called = 0;
 
-  void call() {
+  void handler() {
     called++;
   }
 }
@@ -70,7 +72,7 @@ void main() {
   testWidgets('AnimatedContainer onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedContainerWidgetState(),
       )
@@ -91,7 +93,7 @@ void main() {
   testWidgets('AnimatedPadding onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedPaddingWidgetState(),
       )
@@ -112,7 +114,7 @@ void main() {
   testWidgets('AnimatedAlign onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedAlignWidgetState(),
       )
@@ -133,7 +135,7 @@ void main() {
   testWidgets('AnimatedPositioned onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedPositionedWidgetState(),
       )
@@ -154,7 +156,7 @@ void main() {
   testWidgets('AnimatedPositionedDirectional onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedPositionedDirectionalWidgetState(),
       )
@@ -175,7 +177,7 @@ void main() {
   testWidgets('AnimatedOpacity onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedOpacityWidgetState(),
       )
@@ -223,7 +225,7 @@ void main() {
 
   testWidgets('SliverAnimatedOpacity onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(TestAnimatedWidget(
-      callback: mockOnEndFunction,
+      callback: mockOnEndFunction.handler,
       switchKey: switchKey,
       state: _TestSliverAnimatedOpacityWidgetState(),
     ));
@@ -271,7 +273,7 @@ void main() {
   testWidgets('AnimatedDefaultTextStyle onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedDefaultTextStyleWidgetState(),
       )
@@ -292,7 +294,7 @@ void main() {
   testWidgets('AnimatedPhysicalModel onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedPhysicalModelWidgetState(),
       )
@@ -313,7 +315,7 @@ void main() {
   testWidgets('TweenAnimationBuilder onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestTweenAnimationBuilderWidgetState(),
       )
@@ -334,7 +336,7 @@ void main() {
   testWidgets('AnimatedTheme onEnd callback test', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
       child: TestAnimatedWidget(
-        callback: mockOnEndFunction,
+        callback: mockOnEndFunction.handler,
         switchKey: switchKey,
         state: _TestAnimatedThemeWidgetState(),
       )

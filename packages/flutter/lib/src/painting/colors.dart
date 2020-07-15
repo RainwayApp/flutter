@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 import 'dart:ui' show Color, lerpDouble, hashValues;
 
@@ -425,6 +427,7 @@ class HSLColor {
 ///    primary and accent color swatches.
 ///  * [material.Colors], which defines all of the standard material design
 ///    colors.
+@immutable
 class ColorSwatch<T> extends Color {
   /// Creates a color that has a small table of related colors called a "swatch".
   ///

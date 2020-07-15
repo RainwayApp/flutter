@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 import 'dart:ui' show window;
 
@@ -31,6 +33,7 @@ Widget buildFormFrame({
   int elevation = 8,
   String value = 'two',
   ValueChanged<String> onChanged,
+  VoidCallback onTap,
   Widget icon,
   Color iconDisabledColor,
   Color iconEnabledColor,
@@ -58,6 +61,7 @@ Widget buildFormFrame({
             hint: hint,
             disabledHint: disabledHint,
             onChanged: onChanged,
+            onTap: onTap,
             icon: icon,
             iconSize: iconSize,
             iconDisabledColor: iconDisabledColor,
@@ -590,7 +594,7 @@ void main() {
     } on AssertionError catch (error) {
       expect(
         error.toString(),
-        contains('There should be exactly one item with [DropdownButton]\'s value'),
+        contains("There should be exactly one item with [DropdownButton]'s value"),
       );
     }
   });
@@ -621,7 +625,7 @@ void main() {
     } on AssertionError catch (error) {
       expect(
         error.toString(),
-        contains('There should be exactly one item with [DropdownButton]\'s value'),
+        contains("There should be exactly one item with [DropdownButton]'s value"),
       );
     }
   });
@@ -668,5 +672,95 @@ void main() {
     await tester.tap(find.text('Two'));
     await tester.pumpAndSettle();
     expect(find.text('Two as an Arabic numeral: 2'), findsOneWidget);
+  });
+
+  testWidgets('DropdownButton onTap callback is called when defined', (WidgetTester tester) async {
+    int dropdownButtonTapCounter = 0;
+    String value = 'one';
+    void onChanged(String newValue) { value = newValue; }
+    void onTap() { dropdownButtonTapCounter += 1; }
+
+    Widget build() => buildFormFrame(
+      value: value,
+      onChanged: onChanged,
+      onTap: onTap,
+    );
+    await tester.pumpWidget(build());
+
+    expect(dropdownButtonTapCounter, 0);
+
+    // Tap dropdown button.
+    await tester.tap(find.text('one'));
+    await tester.pumpAndSettle();
+
+    expect(value, equals('one'));
+    expect(dropdownButtonTapCounter, 1); // Should update counter.
+
+    // Tap dropdown menu item.
+    await tester.tap(find.text('three').last);
+    await tester.pumpAndSettle();
+
+    expect(value, equals('three'));
+    expect(dropdownButtonTapCounter, 1); // Should not change.
+
+    // Tap dropdown button again.
+    await tester.tap(find.text('three'));
+    await tester.pumpAndSettle();
+
+    expect(value, equals('three'));
+    expect(dropdownButtonTapCounter, 2); // Should update counter.
+
+    // Tap dropdown menu item.
+    await tester.tap(find.text('two').last);
+    await tester.pumpAndSettle();
+
+    expect(value, equals('two'));
+    expect(dropdownButtonTapCounter, 2); // Should not change.
+  });
+
+  testWidgets('DropdownButtonFormField should re-render if value param changes', (WidgetTester tester) async {
+    String currentValue = 'two';
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) {
+          return MaterialApp(
+            home: Material(
+              child: DropdownButtonFormField<String>(
+                value: currentValue,
+                onChanged: onChanged,
+                items: menuItems.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                    onTap: () {
+                      setState(() {
+                        currentValue = value;
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    // Make sure the rendered text value matches the initial state value.
+    expect(currentValue, equals('two'));
+    expect(find.text(currentValue), findsOneWidget);
+
+    // Tap the DropdownButtonFormField widget
+    await tester.tap(find.byType(dropdownButtonType));
+    await tester.pumpAndSettle();
+
+    // Tap the first dropdown menu item.
+    await tester.tap(find.text('one').last);
+    await tester.pumpAndSettle();
+
+    // Make sure the rendered text value matches the updated state value.
+    expect(currentValue, equals('one'));
+    expect(find.text(currentValue), findsOneWidget);
   });
 }

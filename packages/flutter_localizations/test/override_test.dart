@@ -15,9 +15,12 @@ class FooMaterialLocalizations extends MaterialLocalizationEn {
   ) : super(
     localeName: localeName.toString(),
     fullYearFormat: intl.DateFormat.y(),
+    compactDateFormat: intl.DateFormat.yMd(),
+    shortDateFormat: intl.DateFormat.yMMMd(),
     mediumDateFormat: intl.DateFormat('E, MMM\u00a0d'),
     longDateFormat: intl.DateFormat.yMMMMEEEEd(),
     yearMonthFormat: intl.DateFormat.yMMMM(),
+    shortMonthDayFormat: intl.DateFormat.MMMd(),
     decimalFormat: intl.NumberFormat.decimalPattern(),
     twoDigitZeroPaddedFormat: intl.NumberFormat('00'),
   );
@@ -103,7 +106,7 @@ void main() {
     expect(tester.widget<Text>(find.byKey(textKey)).data, 'Atrás');
   });
 
-  testWidgets('Localizations.override widget tracks parent\'s locale', (WidgetTester tester) async {
+  testWidgets("Localizations.override widget tracks parent's locale", (WidgetTester tester) async {
     Widget buildLocaleFrame(Locale locale) {
       return buildFrame(
         locale: locale,

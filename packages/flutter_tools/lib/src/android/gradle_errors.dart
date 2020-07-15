@@ -108,6 +108,7 @@ final GradleHandledError networkErrorHandler = GradleHandledError(
     'javax.net.ssl.SSLHandshakeException: Remote host closed connection during handshake',
     'java.net.SocketException: Connection reset',
     'java.io.FileNotFoundException',
+    'Gateway Time-out'
   ]),
   handler: ({
     String line,
@@ -116,8 +117,8 @@ final GradleHandledError networkErrorHandler = GradleHandledError(
     bool shouldBuildPluginAsAar,
   }) async {
     globals.printError(
-      '$warningMark Gradle threw an error while trying to update itself. '
-      'Retrying the update...'
+      '$warningMark Gradle threw an error while downloading artifacts from the network. '
+      'Retrying to download...'
     );
     return GradleBuildStatus.retry;
   },
@@ -182,6 +183,7 @@ final GradleHandledError androidXFailureHandler = GradleHandledError(
       BuildEvent(
         'gradle-android-x-failure',
         eventError: 'app-not-using-plugins',
+        flutterUsage: globals.flutterUsage,
       ).send();
     }
     if (hasPlugins && !usesAndroidX) {
@@ -189,11 +191,12 @@ final GradleHandledError androidXFailureHandler = GradleHandledError(
       // a plugin already migrated to AndroidX.
       globals.printStatus(
         'AndroidX incompatibilities may have caused this build to fail. '
-        'Please migrate your app to AndroidX. See https://goo.gl/CP92wY.'
+        'Please migrate your app to AndroidX. See https://goo.gl/CP92wY .'
       );
       BuildEvent(
         'gradle-android-x-failure',
         eventError: 'app-not-using-androidx',
+        flutterUsage: globals.flutterUsage,
       ).send();
     }
     if (hasPlugins && usesAndroidX && shouldBuildPluginAsAar) {
@@ -203,6 +206,7 @@ final GradleHandledError androidXFailureHandler = GradleHandledError(
       BuildEvent(
         'gradle-android-x-failure',
         eventError: 'using-jetifier',
+        flutterUsage: globals.flutterUsage,
       ).send();
     }
     if (hasPlugins && usesAndroidX && !shouldBuildPluginAsAar) {
@@ -213,6 +217,7 @@ final GradleHandledError androidXFailureHandler = GradleHandledError(
       BuildEvent(
         'gradle-android-x-failure',
         eventError: 'not-using-jetifier',
+        flutterUsage: globals.flutterUsage,
       ).send();
       return GradleBuildStatus.retryWithAarPlugins;
     }
@@ -236,8 +241,7 @@ final GradleHandledError licenseNotAcceptedHandler = GradleHandledError(
     bool shouldBuildPluginAsAar,
   }) async {
     const String licenseNotAcceptedMatcher =
-      r'You have not accepted the license agreements of the following SDK components:'
-      r'\s*\[(.+)\]';
+      r'You have not accepted the license agreements of the following SDK components:\s*\[(.+)\]';
 
     final RegExp licenseFailure = RegExp(licenseNotAcceptedMatcher, multiLine: true);
     assert(licenseFailure != null);

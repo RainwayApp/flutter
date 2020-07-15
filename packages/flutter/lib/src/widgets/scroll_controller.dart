@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 
 import 'package:flutter/animation.dart';
@@ -142,6 +144,10 @@ class ScrollController extends ChangeNotifier {
   ///
   /// The duration must not be zero. To jump to a particular value without an
   /// animation, use [jumpTo].
+  ///
+  /// When calling [animateTo] in widget tests, `await`ing the returned
+  /// [Future] may cause the test to hang and timeout. Instead, use
+  /// [WidgetTester.pumpAndSettle].
   Future<void> animateTo(
     double offset, {
     @required Duration duration,

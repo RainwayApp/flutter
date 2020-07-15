@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 
 import 'basic_types.dart';
@@ -28,10 +30,10 @@ import 'text_style.dart';
 ///
 /// The vertical components of strut are as follows:
 ///
-///  * `leading * fontSize / 2` or half the font leading if `leading` is undefined (half leading)
+///  * Half the font-defined leading
 ///  * `ascent * height`
 ///  * `descent * height`
-///  * `leading * fontSize / 2` or half the font leading if `leading` is undefined (half leading)
+///  * Half the font-defined leading
 ///
 /// The sum of these four values is the total height of the line.
 ///
@@ -40,7 +42,8 @@ import 'text_style.dart';
 /// split evenly between the top and bottom. The values for `ascent` and
 /// `descent` are provided by the font named by [fontFamily]. If no
 /// [fontFamily] or [fontFamilyFallback] is provided, then the platform's
-/// default family will be used.
+/// default family will be used. Many fonts will have leading values of
+/// zero, so in practice, the leading component is often irrelevant.
 ///
 /// When [height] is omitted or null, then the font defined ascent and descent
 /// will be used. The font's combined ascent and descent may be taller or
@@ -284,7 +287,7 @@ import 'text_style.dart';
 /// {@end-tool}
 ///
 @immutable
-class StrutStyle extends Diagnosticable {
+class StrutStyle with Diagnosticable {
   /// Creates a strut style.
   ///
   /// The `package` argument must be non-null if the font family is defined in a
@@ -570,7 +573,7 @@ class StrutStyle extends Diagnosticable {
   }
 
   @override
-  String toStringShort() => '${objectRuntimeType(this, 'StrutStyle')}';
+  String toStringShort() => objectRuntimeType(this, 'StrutStyle');
 
   /// Adds all properties prefixing property names with the optional `prefix`.
   @override

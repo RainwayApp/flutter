@@ -10,475 +10,195 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_console.dart';
 import 'package:flutter_tools/src/android/android_device.dart';
 import 'package:flutter_tools/src/android/android_sdk.dart';
-import 'package:flutter_tools/src/application_package.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
+import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/project.dart';
-import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:mockito/mockito.dart';
 import 'package:process/process.dart';
-import 'package:platform/platform.dart';
 
 import '../../src/common.dart';
 import '../../src/context.dart';
-import '../../src/mocks.dart';
-
-class MockFile extends Mock implements File {
-  @override
-  bool existsSync() {
-    return true;
-  }
-
-  @override
-  String get path => '.';
-}
-
-class MockAndroidApk extends Mock implements AndroidApk {
-  @override
-  String get id => '0';
-
-  @override
-  File get file => MockFile();
-}
-
-class MockAndroidSdkVersion extends Mock implements AndroidSdkVersion {}
 
 void main() {
-  group('android_device', () {
-    testUsingContext('stores the requested id', () {
-      const String deviceId = '1234';
-      final AndroidDevice device = AndroidDevice(deviceId);
-      expect(device.id, deviceId);
-    });
+  testWithoutContext('AndroidDevice stores the requested id', () {
+    final AndroidDevice device = setUpAndroidDevice();
 
-    group('startApp', () {
-      MockAndroidApk mockApk;
-      MockProcessManager mockProcessManager;
-      MockAndroidSdk mockAndroidSdk;
+    expect(device.id, '1234');
+  });
 
-      setUp(() {
-        mockApk = MockAndroidApk();
-        mockProcessManager = MockProcessManager();
-        mockAndroidSdk = MockAndroidSdk();
-      });
+  testWithoutContext('parseAdbDeviceProperties parses adb shell output', () {
+    final Map<String, String> properties = parseAdbDeviceProperties(kAdbShellGetprop);
 
-      testUsingContext('succeeds with --cache-sksl', () async {
-        const String deviceId = '1234';
-        final AndroidDevice device = AndroidDevice(deviceId, modelID: 'TestModel');
+    expect(properties, isNotNull);
+    expect(properties['ro.build.characteristics'], 'emulator');
+    expect(properties['ro.product.cpu.abi'], 'x86_64');
+    expect(properties['ro.build.version.sdk'], '23');
+  });
 
-        final Directory sdkDir = MockAndroidSdk.createSdkDirectory();
-        globals.config.setValue('android-sdk', sdkDir.path);
-        final File adbExe = globals.fs.file(getAdbPath(androidSdk));
+  testWithoutContext('adb exiting with heap corruption is only allowed on windows', () async {
+    final List<FakeCommand> commands = <FakeCommand>[
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+        stdout: '[ro.hardware]: [goldfish]\n[ro.build.characteristics]: [unused]',
+        // Heap corruption exit code.
+        exitCode: -1073740940,
+      )
+    ];
 
-        when(mockAndroidSdk.licensesAvailable).thenReturn(true);
-        when(mockAndroidSdk.latestVersion).thenReturn(MockAndroidSdkVersion());
+    final AndroidDevice windowsDevice = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(commands.toList()),
+      platform: FakePlatform(operatingSystem: 'windows'),
+    );
+    final AndroidDevice linuxDevice = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(commands.toList()),
+      platform: FakePlatform(operatingSystem: 'linux'),
+    );
+    final AndroidDevice macOsDevice = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(commands.toList()),
+      platform: FakePlatform(operatingSystem: 'macos')
+    );
 
-        when(mockProcessManager.run(
-          <String>[adbExe.path, '-s', deviceId, 'shell', 'getprop'],
-          stdoutEncoding: latin1,
-          stderrEncoding: latin1,
-        )).thenAnswer((_) async {
-          return ProcessResult(0, 0, '[ro.build.version.sdk]: [24]', '');
-        });
-        when(mockProcessManager.run(
-          any,
-          workingDirectory: anyNamed('workingDirectory'),
-          environment: anyNamed('environment')
-        )).thenAnswer((_) async {
-          return ProcessResult(0, 0, '', '');
-        });
-        when(mockProcessManager.start(
-          any,
-          workingDirectory: anyNamed('workingDirectory'),
-          environment: anyNamed('environment')
-        )).thenAnswer((_) async {
-          return FakeProcess();
-        });
+    // Parsing succeedes despite the error.
+    expect(await windowsDevice.isLocalEmulator, true);
 
-        final LaunchResult launchResult = await device.startApp(
-          mockApk,
-          prebuiltApplication: true,
-          debuggingOptions: DebuggingOptions.disabled(
-            const BuildInfo(BuildMode.release, null),
-            cacheSkSL: true,
+    // Parsing fails and these default to false.
+    expect(await linuxDevice.isLocalEmulator, false);
+    expect(await macOsDevice.isLocalEmulator, false);
+  });
+
+  testWithoutContext('AndroidDevice can detect TargetPlatform from property '
+    'abi and abiList', () async {
+      // The format is [ABI, ABI list]: expected target platform.
+    final Map<List<String>, TargetPlatform> values = <List<String>, TargetPlatform>{
+      <String>['x86_64', 'unknown']: TargetPlatform.android_x64,
+      <String>['x86', 'unknown']: TargetPlatform.android_x86,
+      // The default ABI is arm32
+      <String>['???', 'unknown']: TargetPlatform.android_arm,
+      <String>['arm64-v8a', 'arm64-v8a,']: TargetPlatform.android_arm64,
+      // The Kindle Fire runs 32 bit apps on 64 bit hardware.
+      <String>['arm64-v8a', 'arm']: TargetPlatform.android_arm,
+    };
+
+    for (final MapEntry<List<String>, TargetPlatform> entry in values.entries) {
+      final AndroidDevice device = setUpAndroidDevice(
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          FakeCommand(
+            command: const <String>['adb', '-s', '1234', 'shell', 'getprop'],
+            stdout: '[ro.product.cpu.abi]: [${entry.key.first}]\n'
+              '[ro.product.cpu.abilist]: [${entry.key.last}]'
+          )
+        ]),
+      );
+
+      expect(await device.targetPlatform, entry.value);
+    }
+  });
+
+  testWithoutContext('AndroidDevice supports profile/release mode on arm and x64 targets '
+    'abi and abiList', () async {
+      // The format is [ABI, ABI list]: expected release mode support.
+    final Map<List<String>, bool> values = <List<String>, bool>{
+      <String>['x86_64', 'unknown']: true,
+      <String>['x86', 'unknown']: false,
+      // The default ABI is arm32
+      <String>['???', 'unknown']: true,
+      <String>['arm64-v8a', 'arm64-v8a,']: true,
+      // The Kindle Fire runs 32 bit apps on 64 bit hardware.
+      <String>['arm64-v8a', 'arm']: true,
+    };
+
+    for (final MapEntry<List<String>, bool> entry in values.entries) {
+      final AndroidDevice device = setUpAndroidDevice(
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          FakeCommand(
+            command: const <String>['adb', '-s', '1234', 'shell', 'getprop'],
+            stdout: '[ro.product.cpu.abi]: [${entry.key.first}]\n'
+              '[ro.product.cpu.abilist]: [${entry.key.last}]'
+          )
+        ]),
+      );
+
+      expect(await device.supportsRuntimeMode(BuildMode.release), entry.value);
+      // Debug is always supported.
+      expect(await device.supportsRuntimeMode(BuildMode.debug), true);
+      // jitRelease is never supported.
+      expect(await device.supportsRuntimeMode(BuildMode.jitRelease), false);
+    }
+  });
+
+  testWithoutContext('AndroidDevice can detect local emulator for known types', () async {
+    final Set<String> knownPhyiscal = <String>{
+      'qcom',
+      'samsungexynos7420',
+      'samsungexynos7580',
+      'samsungexynos7870',
+      'samsungexynos7880',
+      'samsungexynos8890',
+      'samsungexynos8895',
+      'samsungexynos9810',
+      'samsungexynos7570',
+    };
+    final Set<String> knownEmulator = <String>{
+      'goldfish',
+      'ranchu',
+    };
+
+    for (final String hardware in knownPhyiscal.followedBy(knownEmulator)) {
+      final AndroidDevice device = setUpAndroidDevice(
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          FakeCommand(
+            command: const <String>[
+              'adb', '-s', '1234', 'shell', 'getprop',
+            ],
+            stdout: '[ro.hardware]: [$hardware]\n'
+              '[ro.build.characteristics]: [unused]'
           ),
-          platformArgs: <String, dynamic>{},
-        );
+        ])
+      );
 
-        expect(launchResult.started, isTrue);
-        expect(verify(mockProcessManager.run(captureAny)).captured.last.join(','),
-          contains(<String>['--ez', 'cache-sksl', 'true'].join(',')));
-      }, overrides: <Type, Generator>{
-        AndroidSdk: () => mockAndroidSdk,
-        FileSystem: () => MemoryFileSystem(),
-        ProcessManager: () => mockProcessManager,
-      });
-
-      testUsingContext('can run a release build on x64', () async {
-        const String deviceId = '1234';
-        final AndroidDevice device = AndroidDevice(deviceId, modelID: 'TestModel');
-
-        final Directory sdkDir = MockAndroidSdk.createSdkDirectory();
-        globals.config.setValue('android-sdk', sdkDir.path);
-        final File adbExe = globals.fs.file(getAdbPath(androidSdk));
-
-        when(mockAndroidSdk.licensesAvailable).thenReturn(true);
-        when(mockAndroidSdk.latestVersion).thenReturn(MockAndroidSdkVersion());
-
-        when(mockProcessManager.run(
-          <String>[adbExe.path, '-s', deviceId, 'shell', 'getprop'],
-          stdoutEncoding: latin1,
-          stderrEncoding: latin1,
-        )).thenAnswer((_) async {
-          return ProcessResult(0, 0, '[ro.build.version.sdk]: [24]\n[ro.product.cpu.abi]: [x86_64]', '');
-        });
-        when(mockProcessManager.run(
-          any,
-          workingDirectory: anyNamed('workingDirectory'),
-          environment: anyNamed('environment')
-        )).thenAnswer((_) async {
-          return ProcessResult(0, 0, '', '');
-        });
-        when(mockProcessManager.start(
-          any,
-          workingDirectory: anyNamed('workingDirectory'),
-          environment: anyNamed('environment')
-        )).thenAnswer((_) async {
-          return FakeProcess();
-        });
-
-        final LaunchResult launchResult = await device.startApp(
-          mockApk,
-          prebuiltApplication: true,
-          debuggingOptions: DebuggingOptions.disabled(
-            const BuildInfo(BuildMode.release, null),
-          ),
-          platformArgs: <String, dynamic>{},
-        );
-        expect(launchResult.started, true);
-      }, overrides: <Type, Generator>{
-        AndroidSdk: () => mockAndroidSdk,
-        FileSystem: () => MemoryFileSystem(),
-        ProcessManager: () => mockProcessManager,
-      });
-    });
+      expect(await device.isLocalEmulator, knownEmulator.contains(hardware));
+    }
   });
 
-  group('getAdbDevices', () {
-    MockProcessManager mockProcessManager;
+  testWithoutContext('AndroidDevice can detect unknown hardware', () async {
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>[
+            'adb', '-s', '1234', 'shell', 'getprop',
+          ],
+          stdout: '[ro.hardware]: [unknown]\n'
+            '[ro.build.characteristics]: [att]'
+        ),
+      ])
+    );
 
-    setUp(() {
-      mockProcessManager = MockProcessManager();
-    });
-
-    testUsingContext('throws on missing adb path', () {
-      final Directory sdkDir = MockAndroidSdk.createSdkDirectory();
-      globals.config.setValue('android-sdk', sdkDir.path);
-
-      final File adbExe = globals.fs.file(getAdbPath(androidSdk));
-      when(mockProcessManager.runSync(
-        <String>[adbExe.path, 'devices', '-l'],
-      )).thenThrow(ArgumentError(adbExe.path));
-      expect(() => getAdbDevices(), throwsToolExit(message: RegExp('Unable to find "adb".*${adbExe.path}')));
-    }, overrides: <Type, Generator>{
-      AndroidSdk: () => MockAndroidSdk(),
-      FileSystem: () => MemoryFileSystem(),
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('throws on failing adb', () {
-      final Directory sdkDir = MockAndroidSdk.createSdkDirectory();
-      globals.config.setValue('android-sdk', sdkDir.path);
-
-      final File adbExe = globals.fs.file(getAdbPath(androidSdk));
-      when(mockProcessManager.runSync(
-        <String>[adbExe.path, 'devices', '-l'],
-      )).thenThrow(ProcessException(adbExe.path, <String>['devices', '-l']));
-      expect(() => getAdbDevices(), throwsToolExit(message: RegExp('Unable to run "adb".*${adbExe.path}')));
-    }, overrides: <Type, Generator>{
-      AndroidSdk: () => MockAndroidSdk(),
-      FileSystem: () => MemoryFileSystem(),
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('physical devices', () {
-      final List<AndroidDevice> devices = <AndroidDevice>[];
-      parseADBDeviceOutput('''
-List of devices attached
-05a02bac               device usb:336592896X product:razor model:Nexus_7 device:flo
-
-''', devices: devices);
-      expect(devices, hasLength(1));
-      expect(devices.first.name, 'Nexus 7');
-      expect(devices.first.category, Category.mobile);
-    });
-
-    testUsingContext('emulators and short listings', () {
-      final List<AndroidDevice> devices = <AndroidDevice>[];
-      parseADBDeviceOutput('''
-List of devices attached
-localhost:36790        device
-0149947A0D01500C       device usb:340787200X
-emulator-5612          host features:shell_2
-
-''', devices: devices);
-      expect(devices, hasLength(3));
-      expect(devices.first.name, 'localhost:36790');
-    });
-
-    testUsingContext('android n', () {
-      final List<AndroidDevice> devices = <AndroidDevice>[];
-      parseADBDeviceOutput('''
-List of devices attached
-ZX1G22JJWR             device usb:3-3 product:shamu model:Nexus_6 device:shamu features:cmd,shell_v2
-''', devices: devices);
-      expect(devices, hasLength(1));
-      expect(devices.first.name, 'Nexus 6');
-    });
-
-    testUsingContext('adb error message', () {
-      final List<AndroidDevice> devices = <AndroidDevice>[];
-      final List<String> diagnostics = <String>[];
-      parseADBDeviceOutput('''
-It appears you do not have 'Android SDK Platform-tools' installed.
-Use the 'android' tool to install them:
-    android update sdk --no-ui --filter 'platform-tools'
-''', devices: devices, diagnostics: diagnostics);
-      expect(devices, hasLength(0));
-      expect(diagnostics, hasLength(1));
-      expect(diagnostics.first, contains('you do not have'));
-    });
+    expect(await device.isLocalEmulator, false);
   });
 
-  group('parseAdbDeviceProperties', () {
-    test('parse adb shell output', () {
-      final Map<String, String> properties = parseAdbDeviceProperties(kAdbShellGetprop);
-      expect(properties, isNotNull);
-      expect(properties['ro.build.characteristics'], 'emulator');
-      expect(properties['ro.product.cpu.abi'], 'x86_64');
-      expect(properties['ro.build.version.sdk'], '23');
-    });
+  testWithoutContext('AndroidDevice can detect unknown emulator', () async {
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>[
+            'adb', '-s', '1234', 'shell', 'getprop',
+          ],
+          stdout: '[ro.hardware]: [unknown]\n'
+            '[ro.build.characteristics]: [att,emulator]'
+        ),
+      ])
+    );
+
+    expect(await device.isLocalEmulator, true);
   });
 
-  group('adb.exe exiting with heap corruption on windows', () {
-    final ProcessManager mockProcessManager = MockProcessManager();
-    String hardware;
-    String buildCharacteristics;
-
-    setUp(() {
-      hardware = 'goldfish';
-      buildCharacteristics = 'unused';
-      exitCode = -1;
-      when(mockProcessManager.run(
-        argThat(contains('getprop')),
-        stderrEncoding: anyNamed('stderrEncoding'),
-        stdoutEncoding: anyNamed('stdoutEncoding'),
-      )).thenAnswer((_) {
-        final StringBuffer buf = StringBuffer()
-          ..writeln('[ro.hardware]: [$hardware]')..writeln(
-              '[ro.build.characteristics]: [$buildCharacteristics]');
-        final ProcessResult result = ProcessResult(1, exitCode, buf.toString(), '');
-        return Future<ProcessResult>.value(result);
-      });
-    });
-
-    testUsingContext('nonHeapCorruptionErrorOnWindows', () async {
-      exitCode = -1073740941;
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, false);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-      Platform: () => FakePlatform(
-        operatingSystem: 'windows',
-        environment: <String, String>{
-          'ANDROID_HOME': '/',
-        },
-      ),
-    });
-
-    testUsingContext('heapCorruptionOnWindows', () async {
-      exitCode = -1073740940;
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, true);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-      Platform: () => FakePlatform(
-        operatingSystem: 'windows',
-        environment: <String, String>{
-          'ANDROID_HOME': '/',
-        },
-      ),
-    });
-
-    testUsingContext('heapCorruptionExitCodeOnLinux', () async {
-      exitCode = -1073740940;
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, false);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-      Platform: () => FakePlatform(
-        operatingSystem: 'linux',
-        environment: <String, String>{
-          'ANDROID_HOME': '/',
-        },
-      ),
-    });
-
-    testUsingContext('noErrorOnLinux', () async {
-      exitCode = 0;
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, true);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-      Platform: () => FakePlatform(
-        operatingSystem: 'linux',
-        environment: <String, String>{
-          'ANDROID_HOME': '/',
-        },
-      ),
-    });
-  });
-
-  group('ABI detection', () {
-    ProcessManager mockProcessManager;
-    String cpu;
-    String abilist;
-
-    setUp(() {
-      mockProcessManager = MockProcessManager();
-      cpu = 'unknown';
-      abilist = 'unknown';
-      when(mockProcessManager.run(
-        argThat(contains('getprop')),
-        stderrEncoding: anyNamed('stderrEncoding'),
-        stdoutEncoding: anyNamed('stdoutEncoding'),
-      )).thenAnswer((_) {
-        final StringBuffer buf = StringBuffer()
-          ..writeln('[ro.product.cpu.abi]: [$cpu]')
-          ..writeln('[ro.product.cpu.abilist]: [$abilist]');
-        final ProcessResult result = ProcessResult(1, 0, buf.toString(), '');
-        return Future<ProcessResult>.value(result);
-      });
-    });
-
-    testUsingContext('detects x64', () async {
-      cpu = 'x86_64';
-      final AndroidDevice device = AndroidDevice('test');
-
-      expect(await device.targetPlatform, TargetPlatform.android_x64);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager
-    });
-
-    testUsingContext('detects x86', () async {
-      cpu = 'x86';
-      final AndroidDevice device = AndroidDevice('test');
-
-      expect(await device.targetPlatform, TargetPlatform.android_x86);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager
-    });
-
-    testUsingContext('unknown device defaults to 32bit arm', () async {
-      cpu = '???';
-      final AndroidDevice device = AndroidDevice('test');
-
-      expect(await device.targetPlatform, TargetPlatform.android_arm);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager
-    });
-
-    testUsingContext('detects 64 bit arm', () async {
-      cpu = 'arm64-v8a';
-      abilist = 'arm64-v8a,';
-      final AndroidDevice device = AndroidDevice('test');
-
-      // If both abi properties agree, we are 64 bit.
-      expect(await device.targetPlatform, TargetPlatform.android_arm64);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager
-    });
-
-    testUsingContext('detects kindle fire ABI', () async {
-      cpu = 'arm64-v8a';
-      abilist = 'arm';
-      final AndroidDevice device = AndroidDevice('test');
-
-      // If one does not contain arm64, assume 32 bit.
-      expect(await device.targetPlatform, TargetPlatform.android_arm);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager
-    });
-  });
-
-  group('isLocalEmulator', () {
-    final ProcessManager mockProcessManager = MockProcessManager();
-    String hardware;
-    String buildCharacteristics;
-
-    setUp(() {
-      hardware = 'unknown';
-      buildCharacteristics = 'unused';
-      when(mockProcessManager.run(
-        argThat(contains('getprop')),
-        stderrEncoding: anyNamed('stderrEncoding'),
-        stdoutEncoding: anyNamed('stdoutEncoding'),
-      )).thenAnswer((_) {
-        final StringBuffer buf = StringBuffer()
-          ..writeln('[ro.hardware]: [$hardware]')
-          ..writeln('[ro.build.characteristics]: [$buildCharacteristics]');
-        final ProcessResult result = ProcessResult(1, 0, buf.toString(), '');
-        return Future<ProcessResult>.value(result);
-      });
-    });
-
-    testUsingContext('knownPhysical', () async {
-      hardware = 'samsungexynos7420';
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, false);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('knownPhysical Samsung SM G570M', () async {
-      hardware = 'samsungexynos7570';
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, false);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('knownEmulator', () async {
-      hardware = 'goldfish';
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, true);
-      expect(await device.supportsHardwareRendering, true);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('unknownPhysical', () async {
-      buildCharacteristics = 'att';
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, false);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('unknownEmulator', () async {
-      buildCharacteristics = 'att,emulator';
-      final AndroidDevice device = AndroidDevice('test');
-      expect(await device.isLocalEmulator, true);
-      expect(await device.supportsHardwareRendering, true);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-  });
-
-  testUsingContext('isSupportedForProject is true on module project', () async {
-    globals.fs.file('pubspec.yaml')
+  testWithoutContext('isSupportedForProject is true on module project', () async {
+    final FileSystem fileSystem = MemoryFileSystem.test();
+    fileSystem.file('pubspec.yaml')
       ..createSync()
       ..writeAsStringSync(r'''
 name: example
@@ -486,259 +206,188 @@ name: example
 flutter:
   module: {}
 ''');
-    globals.fs.file('.packages').createSync();
-    final FlutterProject flutterProject = FlutterProject.current();
+    fileSystem.file('.packages').createSync();
+    final FlutterProject flutterProject = FlutterProjectFactory(
+      fileSystem: fileSystem,
+      logger: BufferLogger.test(),
+    ).fromDirectory(fileSystem.currentDirectory);
+    final AndroidDevice device = setUpAndroidDevice(fileSystem: fileSystem);
 
-    expect(AndroidDevice('test').isSupportedForProject(flutterProject), true);
-  }, overrides: <Type, Generator>{
-    FileSystem: () => MemoryFileSystem(),
-    ProcessManager: () => FakeProcessManager.any(),
+    expect(device.isSupportedForProject(flutterProject), true);
   });
 
-  testUsingContext('isSupportedForProject is true with editable host app', () async {
-    globals.fs.file('pubspec.yaml').createSync();
-    globals.fs.file('.packages').createSync();
-    globals.fs.directory('android').createSync();
-    final FlutterProject flutterProject = FlutterProject.current();
+  testWithoutContext('isSupportedForProject is true with editable host app', () async {
+    final FileSystem fileSystem = MemoryFileSystem.test();
+    fileSystem.file('pubspec.yaml').createSync();
+    fileSystem.file('.packages').createSync();
+    fileSystem.directory('android').createSync();
+    final FlutterProject flutterProject = FlutterProjectFactory(
+      fileSystem: fileSystem,
+      logger: BufferLogger.test(),
+    ).fromDirectory(fileSystem.currentDirectory);
 
-    expect(AndroidDevice('test').isSupportedForProject(flutterProject), true);
-  }, overrides: <Type, Generator>{
-    FileSystem: () => MemoryFileSystem(),
-    ProcessManager: () => FakeProcessManager.any(),
+    final AndroidDevice device = setUpAndroidDevice(fileSystem: fileSystem);
+
+    expect(device.isSupportedForProject(flutterProject), true);
   });
 
-  testUsingContext('isSupportedForProject is false with no host app and no module', () async {
-    globals.fs.file('pubspec.yaml').createSync();
-    globals.fs.file('.packages').createSync();
-    final FlutterProject flutterProject = FlutterProject.current();
+  testWithoutContext('isSupportedForProject is false with no host app and no module', () async {
+    final FileSystem fileSystem = MemoryFileSystem.test();
+    fileSystem.file('pubspec.yaml').createSync();
+    fileSystem.file('.packages').createSync();
+    final FlutterProject flutterProject = FlutterProjectFactory(
+      fileSystem: fileSystem,
+      logger: BufferLogger.test(),
+    ).fromDirectory(fileSystem.currentDirectory);
 
-    expect(AndroidDevice('test').isSupportedForProject(flutterProject), false);
-  }, overrides: <Type, Generator>{
-    FileSystem: () => MemoryFileSystem(),
-    ProcessManager: () => FakeProcessManager.any(),
+    final AndroidDevice device = setUpAndroidDevice(fileSystem: fileSystem);
+
+    expect(device.isSupportedForProject(flutterProject), false);
   });
 
-  group('emulatorId', () {
-    final ProcessManager mockProcessManager = MockProcessManager();
-    const String dummyEmulatorId = 'dummyEmulatorId';
-    final Future<Socket> Function(String host, int port) unresponsiveSocket =
-        (String host, int port) async => MockUnresponsiveAndroidConsoleSocket();
-    final Future<Socket> Function(String host, int port) workingSocket =
-        (String host, int port) async => MockWorkingAndroidConsoleSocket(dummyEmulatorId);
-    String hardware;
-    bool socketWasCreated;
+  testWithoutContext('AndroidDevice returns correct ID for responsive emulator', () async {
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', 'emulator-5555', 'shell', 'getprop'],
+          stdout: '[ro.hardware]: [goldfish]'
+        )
+      ]),
+      id: 'emulator-5555',
+      androidConsoleSocketFactory: (String host, int port) async =>
+        MockWorkingAndroidConsoleSocket('dummyEmulatorId'),
+    );
 
-    setUp(() {
-      hardware = 'goldfish'; // Known emulator
-      socketWasCreated = false;
-      when(mockProcessManager.run(
-        argThat(contains('getprop')),
-        stderrEncoding: anyNamed('stderrEncoding'),
-        stdoutEncoding: anyNamed('stdoutEncoding'),
-      )).thenAnswer((_) {
-        final StringBuffer buf = StringBuffer()
-          ..writeln('[ro.hardware]: [$hardware]');
-        final ProcessResult result = ProcessResult(1, 0, buf.toString(), '');
-        return Future<ProcessResult>.value(result);
-      });
-    });
+    expect(await device.emulatorId, equals('dummyEmulatorId'));
+  });
 
-    testUsingContext('returns correct ID for responsive emulator', () async {
-      final AndroidDevice device = AndroidDevice('emulator-5555');
-      expect(await device.emulatorId, equals(dummyEmulatorId));
-    }, overrides: <Type, Generator>{
-      AndroidConsoleSocketFactory: () => workingSocket,
-      ProcessManager: () => mockProcessManager,
-    });
+  testWithoutContext('AndroidDevice does not create socket for non-emulator devices', () async {
+    bool socketWasCreated = false;
 
-    testUsingContext('does not create socket for non-emulator devices', () async {
-      hardware = 'samsungexynos7420';
-
-      // Still use an emulator-looking ID so we can be sure the failure is due
-      // to the isLocalEmulator field and not because the ID doesn't contain a
-      // port.
-      final AndroidDevice device = AndroidDevice('emulator-5555');
-      expect(await device.emulatorId, isNull);
-      expect(socketWasCreated, isFalse);
-    }, overrides: <Type, Generator>{
-      AndroidConsoleSocketFactory: () => (String host, int port) async {
+    // Still use an emulator-looking ID so we can be sure the failure is due
+    // to the isLocalEmulator field and not because the ID doesn't contain a
+    // port.
+    final AndroidDevice device = setUpAndroidDevice(
+      id: 'emulator-5555',
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', 'emulator-5555', 'shell', 'getprop'],
+          stdout: '[ro.hardware]: [samsungexynos7420]'
+        )
+      ]),
+      androidConsoleSocketFactory: (String host, int port) async {
         socketWasCreated = true;
         throw 'Socket was created for non-emulator';
-      },
-      ProcessManager: () => mockProcessManager,
-    });
+      }
+    );
 
-    testUsingContext('does not create socket for emulators with no port', () async {
-      final AndroidDevice device = AndroidDevice('emulator-noport');
-      expect(await device.emulatorId, isNull);
-      expect(socketWasCreated, isFalse);
-    }, overrides: <Type, Generator>{
-      AndroidConsoleSocketFactory: () => (String host, int port) async {
+    expect(await device.emulatorId, isNull);
+    expect(socketWasCreated, isFalse);
+  });
+
+  testWithoutContext('AndroidDevice does not create socket for emulators with no port', () async {
+    bool socketWasCreated = false;
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.hardware]: [goldfish]'
+        )
+      ]),
+      androidConsoleSocketFactory: (String host, int port) async {
         socketWasCreated = true;
         throw 'Socket was created for emulator without port in ID';
       },
-      ProcessManager: () => mockProcessManager,
-    });
+    );
 
-    testUsingContext('returns null for connection error', () async {
-      final AndroidDevice device = AndroidDevice('emulator-5555');
-      expect(await device.emulatorId, isNull);
-    }, overrides: <Type, Generator>{
-      AndroidConsoleSocketFactory: () => (String host, int port) => throw 'Fake socket error',
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('returns null for unresponsive device', () async {
-      final AndroidDevice device = AndroidDevice('emulator-5555');
-      expect(await device.emulatorId, isNull);
-    }, overrides: <Type, Generator>{
-      AndroidConsoleSocketFactory: () => unresponsiveSocket,
-      ProcessManager: () => mockProcessManager,
-    });
+    expect(await device.emulatorId, isNull);
+    expect(socketWasCreated, isFalse);
   });
 
-  group('portForwarder', () {
-    final ProcessManager mockProcessManager = MockProcessManager();
-    final AndroidDevice device = AndroidDevice('1234');
-    final DevicePortForwarder forwarder = device.portForwarder;
+  testWithoutContext('AndroidDevice.emulatorId is null for connection error', () async {
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.hardware]: [goldfish]'
+        )
+      ]),
+      androidConsoleSocketFactory: (String host, int port) => throw Exception('Fake socket error'),
+    );
 
-    testUsingContext('returns the generated host port from stdout', () async {
-      when(mockProcessManager.run(argThat(contains('forward'))))
-          .thenAnswer((_) async => ProcessResult(0, 0, '456', ''));
-
-      expect(await forwarder.forward(123), equals(456));
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('returns the supplied host port when stdout is empty', () async {
-      when(mockProcessManager.run(argThat(contains('forward'))))
-          .thenAnswer((_) async => ProcessResult(0, 0, '', ''));
-
-      expect(await forwarder.forward(123, hostPort: 456), equals(456));
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('returns the supplied host port when stdout is the host port', () async {
-      when(mockProcessManager.run(argThat(contains('forward'))))
-          .thenAnswer((_) async => ProcessResult(0, 0, '456', ''));
-
-      expect(await forwarder.forward(123, hostPort: 456), equals(456));
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('throws an error when stdout is not blank nor the host port', () async {
-      when(mockProcessManager.run(argThat(contains('forward'))))
-          .thenAnswer((_) async => ProcessResult(0, 0, '123456', ''));
-
-      expect(forwarder.forward(123, hostPort: 456), throwsA(isA<ProcessException>()));
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('forwardedPorts returns empty list when forward failed', () {
-      when(mockProcessManager.runSync(argThat(contains('forward'))))
-          .thenReturn(ProcessResult(0, 1, '', ''));
-
-      expect(forwarder.forwardedPorts, equals(const <ForwardedPort>[]));
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('disposing device disposes the portForwarder', () async {
-      bool unforwardCalled = false;
-      when(mockProcessManager.run(argThat(containsAll(<String>[
-        'forward',
-        'tcp:0',
-        'tcp:123',
-      ])))).thenAnswer((_) async {
-        return ProcessResult(0, 0, '456', '');
-      });
-      when(mockProcessManager.runSync(argThat(containsAll(<String>[
-        'forward',
-        '--list',
-      ])))).thenReturn(ProcessResult(0, 0, '1234 tcp:456 tcp:123', ''));
-      when(mockProcessManager.run(argThat(containsAll(<String>[
-        'forward',
-        '--remove',
-        'tcp:456',
-      ])))).thenAnswer((_) async {
-        unforwardCalled = true;
-        return ProcessResult(0, 0, '', '');
-      });
-      expect(await forwarder.forward(123), equals(456));
-
-      await device.dispose();
-
-      expect(unforwardCalled, isTrue);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
+    expect(await device.emulatorId, isNull);
   });
 
-  group('lastLogcatTimestamp', () {
-    final ProcessManager mockProcessManager = MockProcessManager();
-    final AndroidDevice device = AndroidDevice('1234');
+  testWithoutContext('AndroidDevice.emulatorId is null for unresponsive device', () async {
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.hardware]: [goldfish]'
+        )
+      ]),
+      androidConsoleSocketFactory: (String host, int port) async =>
+        MockUnresponsiveAndroidConsoleSocket(),
+    );
 
-    testUsingContext('returns null if shell command failed', () async {
-      when(mockProcessManager.runSync(argThat(contains('logcat'))))
-          .thenReturn(ProcessResult(0, 1, '', ''));
-      expect(device.lastLogcatTimestamp, isNull);
-    }, overrides: <Type, Generator>{
-      ProcessManager: () => mockProcessManager,
-    });
+    expect(await device.emulatorId, isNull);
   });
 
-  group('logReader', () {
-    ProcessManager mockProcessManager;
-    AndroidSdk mockAndroidSdk;
+  testWithoutContext('AndroidDevice.emulatorId is null on early disconnect', () async {
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.hardware]: [goldfish]'
+        )
+      ]),
+      androidConsoleSocketFactory: (String host, int port) async =>
+        MockDisconnectingAndroidConsoleSocket()
+    );
 
-    setUp(() {
-      mockAndroidSdk = MockAndroidSdk();
-      mockProcessManager = MockProcessManager();
-    });
-
-    testUsingContext('calls adb logcat with expected flags', () async {
-      const String klastLocatcatTimestamp = '11-27 15:39:04.506';
-      when(mockAndroidSdk.adbPath).thenReturn('adb');
-      when(mockProcessManager.runSync(<String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time', '-t', '1']))
-        .thenReturn(ProcessResult(0, 0, '$klastLocatcatTimestamp I/flutter: irrelevant', ''));
-      when(mockProcessManager.start(argThat(contains('logcat'))))
-        .thenAnswer((_) => Future<Process>.value(createMockProcess()));
-
-      final AndroidDevice device = AndroidDevice('1234');
-      final DeviceLogReader logReader = device.getLogReader();
-      logReader.logLines.listen((_) {});
-
-      verify(mockProcessManager.start(const <String>['adb', '-s', '1234', 'logcat', '-v', 'time', '-T', klastLocatcatTimestamp]))
-        .called(1);
-    }, overrides: <Type, Generator>{
-      AndroidSdk: () => mockAndroidSdk,
-      ProcessManager: () => mockProcessManager,
-    });
-
-    testUsingContext('calls adb logcat with expected flags when the device logs are empty', () async {
-      when(mockAndroidSdk.adbPath).thenReturn('adb');
-      when(mockProcessManager.runSync(<String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time', '-t', '1']))
-        .thenReturn(ProcessResult(0, 0, '', ''));
-      when(mockProcessManager.start(argThat(contains('logcat'))))
-        .thenAnswer((_) => Future<Process>.value(createMockProcess()));
-
-      final AndroidDevice device = AndroidDevice('1234');
-      final DeviceLogReader logReader = device.getLogReader();
-      logReader.logLines.listen((_) {});
-
-      verify(mockProcessManager.start(const <String>['adb', '-s', '1234', 'logcat', '-v', 'time', '-T', '']))
-        .called(1);
-    }, overrides: <Type, Generator>{
-      AndroidSdk: () => mockAndroidSdk,
-      ProcessManager: () => mockProcessManager,
-    });
+    expect(await device.emulatorId, isNull);
   });
 
-  test('Can parse adb shell dumpsys info', () {
+  testWithoutContext('AndroidDevice lastLogcatTimestamp returns null if shell command failed', () async {
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time', '-t', '1'],
+          exitCode: 1,
+        )
+      ])
+    );
+
+    expect(device.lastLogcatTimestamp, isNull);
+  });
+
+  testWithoutContext('AndroidDevice AdbLogReaders for past+future and future logs are not the same', () async {
+    final AndroidDevice device = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [23]',
+          exitCode: 1,
+        ),
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time', '-s', 'flutter'],
+        ),
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+        )
+      ])
+    );
+
+    final DeviceLogReader pastLogReader = await device.getLogReader(includePastLogs: true);
+    final DeviceLogReader defaultLogReader = await device.getLogReader();
+    expect(pastLogReader, isNot(equals(defaultLogReader)));
+
+    // Getting again is cached.
+    expect(pastLogReader, equals(await device.getLogReader(includePastLogs: true)));
+    expect(defaultLogReader, equals(await device.getLogReader()));
+  });
+
+  testWithoutContext('Can parse adb shell dumpsys info', () {
     const String exampleOutput = r'''
 Applications Memory Usage (in Kilobytes):
 Uptime: 441088659 Realtime: 521464097
@@ -795,6 +444,7 @@ Uptime: 441088659 Realtime: 521464097
     final AndroidMemoryInfo result = parseMeminfoDump(exampleOutput);
 
     // Parses correctly
+    expect(result.realTime, 521464097);
     expect(result.javaHeap, 4296);
     expect(result.nativeHeap, 8620);
     expect(result.code, 11288);
@@ -806,6 +456,7 @@ Uptime: 441088659 Realtime: 521464097
     // toJson works correctly
     final Map<String, Object> json = result.toJson();
 
+    expect(json, containsPair('Realtime', 521464097));
     expect(json, containsPair('Java Heap', 4296));
     expect(json, containsPair('Native Heap', 8620));
     expect(json, containsPair('Code', 11288));
@@ -822,6 +473,28 @@ Uptime: 441088659 Realtime: 521464097
   });
 }
 
+AndroidDevice setUpAndroidDevice({
+  String id,
+  AndroidSdk androidSdk,
+  FileSystem fileSystem,
+  ProcessManager processManager,
+  Platform platform,
+  AndroidConsoleSocketFactory androidConsoleSocketFactory = kAndroidConsoleSocketFactory,
+}) {
+  androidSdk ??= MockAndroidSdk();
+  when(androidSdk.adbPath).thenReturn('adb');
+  return AndroidDevice(id ?? '1234',
+    logger: BufferLogger.test(),
+    platform: platform ?? FakePlatform(operatingSystem: 'linux'),
+    androidSdk: androidSdk,
+    fileSystem: fileSystem ?? MemoryFileSystem.test(),
+    processManager: processManager ?? FakeProcessManager.any(),
+    androidConsoleSocketFactory: androidConsoleSocketFactory,
+    timeoutConfiguration: const TimeoutConfiguration(),
+  );
+}
+
+class MockAndroidSdk extends Mock implements AndroidSdk {}
 class MockProcessManager extends Mock implements ProcessManager {}
 
 const String kAdbShellGetprop = '''
@@ -1023,9 +696,22 @@ class MockUnresponsiveAndroidConsoleSocket extends Mock implements Socket {
   void add(List<int> data) {}
 }
 
-class AndroidPackageTest extends ApplicationPackage {
-  AndroidPackageTest() : super(id: 'app-id');
+/// An Android console socket that drops all input and returns no output.
+class MockDisconnectingAndroidConsoleSocket extends Mock implements Socket {
+  MockDisconnectingAndroidConsoleSocket() {
+    _controller.add('Android Console: Welcome!\n');
+    // Include OK in the same packet here. In the response to "avd name"
+    // it's sent alone to ensure both are handled.
+    _controller.add('Android Console: Some intro text\nOK\n');
+  }
+
+  final StreamController<String> _controller = StreamController<String>();
 
   @override
-  String get name => 'app-package';
+  Stream<E> asyncMap<E>(FutureOr<E> convert(Uint8List event)) => _controller.stream as Stream<E>;
+
+  @override
+  void add(List<int> data) {
+    _controller.close();
+  }
 }

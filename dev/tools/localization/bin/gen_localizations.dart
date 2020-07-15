@@ -40,7 +40,6 @@
 // dart dev/tools/localization/bin/gen_localizations.dart --overwrite
 // ```
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -50,6 +49,8 @@ import '../gen_cupertino_localizations.dart';
 import '../gen_material_localizations.dart';
 import '../localizations_utils.dart';
 import '../localizations_validator.dart';
+
+import 'encode_kn_arb_files.dart';
 
 /// This is the core of this script; it generates the code used for translations.
 String generateArbBasedLocalizationSubclasses({
@@ -77,6 +78,11 @@ String generateArbBasedLocalizationSubclasses({
   assert(supportedLanguagesConstant.isNotEmpty);
   assert(supportedLanguagesDocMacro.isNotEmpty);
 
+  // See https://github.com/flutter/flutter/issues/53036 for context on why
+  // 'no' is being used as a synonym for 'nb'. It only uses this synonym
+  // if 'nb' is not detected as a valid arb file.
+  bool isNbSynonymOfNo = false;
+
   final StringBuffer output = StringBuffer();
   output.writeln(generateHeader('dart dev/tools/localization/bin/gen_localizations.dart --overwrite'));
 
@@ -102,6 +108,12 @@ String generateArbBasedLocalizationSubclasses({
     allResourceIdentifiers.addAll(localeToResources[locale].keys.toList()..sort());
   }
 
+  if (languageToLocales['no'] != null && languageToLocales['nb'] == null) {
+    languageToLocales['nb'] ??= <LocaleInfo>[];
+    languageToLocales['nb'].add(LocaleInfo.fromString('nb'));
+    isNbSynonymOfNo = true;
+  }
+
   // We generate one class per supported language (e.g.
   // `MaterialLocalizationEn`). These implement everything that is needed by the
   // superclass (e.g. GlobalMaterialLocalizations).
@@ -118,7 +130,7 @@ String generateArbBasedLocalizationSubclasses({
 
   // If scriptCodes for a language are defined, we expect a scriptCode to be
   // defined for locales that contain a countryCode. The superclass becomes
-  // the script sublcass (e.g. `MaterialLocalizationZhHant`) and the generated
+  // the script subclass (e.g. `MaterialLocalizationZhHant`) and the generated
   // subclass will also contain the script code (e.g. `MaterialLocalizationZhHantTW`).
 
   // When scriptCodes are not defined for languages that use scriptCodes to distinguish
@@ -131,6 +143,22 @@ String generateArbBasedLocalizationSubclasses({
   final LocaleInfo canonicalLocale = LocaleInfo.fromString('en');
   for (final String languageName in languageCodes) {
     final LocaleInfo languageLocale = LocaleInfo.fromString(languageName);
+
+    // See https://github.com/flutter/flutter/issues/53036 for context on why
+    // 'no' is being used as a synonym for 'nb'. It only uses this synonym
+    // if 'nb' is not detected as a valid arb file.
+    if (languageName == 'nb' && isNbSynonymOfNo) {
+      output.writeln(generateClassDeclaration(
+        languageLocale,
+        generatedClassPrefix,
+        '${generatedClassPrefix}No'),
+      );
+      output.writeln(generateConstructor(languageLocale));
+      output.writeln('}');
+      supportedLocales.writeln('///  * `$languageName` - ${describeLocale(languageName)}, which, in this library, is a synonym of `no`');
+      continue;
+    }
+
     output.writeln(generateClassDeclaration(languageLocale, generatedClassPrefix, baseClass));
     output.writeln(generateConstructor(languageLocale));
 
@@ -151,7 +179,7 @@ String generateArbBasedLocalizationSubclasses({
         output.writeln(generateClassDeclaration(
           scriptBaseLocale,
           generatedClassPrefix,
-          '$generatedClassPrefix${camelCase(languageLocale)}',
+          '$generatedClassPrefix${languageLocale.camelCase()}',
         ));
         output.writeln(generateConstructor(scriptBaseLocale));
         final Map<String, String> scriptResources = localeToResources[scriptBaseLocale];
@@ -175,7 +203,7 @@ String generateArbBasedLocalizationSubclasses({
           output.writeln(generateClassDeclaration(
             locale,
             generatedClassPrefix,
-            '$generatedClassPrefix${camelCase(scriptBaseLocale)}',
+            '$generatedClassPrefix${scriptBaseLocale.camelCase()}',
           ));
           output.writeln(generateConstructor(locale));
           final Map<String, String> localeResources = localeToResources[locale];
@@ -201,7 +229,7 @@ String generateArbBasedLocalizationSubclasses({
         output.writeln(generateClassDeclaration(
           locale,
           generatedClassPrefix,
-          '$generatedClassPrefix${camelCase(languageLocale)}',
+          '$generatedClassPrefix${languageLocale.camelCase()}',
         ));
         output.writeln(generateConstructor(locale));
         for (final String key in localeResources.keys) {
@@ -213,6 +241,7 @@ String generateArbBasedLocalizationSubclasses({
        output.writeln('}');
       }
     }
+
     final String scriptCodeMessage = scriptCodeCount == 0 ? '' : ' and $scriptCodeCount script' + (scriptCodeCount == 1 ? '' : 's');
     if (countryCodeCount == 0) {
       if (scriptCodeCount == 0)
@@ -267,7 +296,7 @@ $factoryDeclaration
     if (languageToLocales[language].length == 1) {
       output.writeln('''
     case '$language':
-      return $generatedClassPrefix${camelCase(languageToLocales[language][0])}($factoryArguments);''');
+      return $generatedClassPrefix${(languageToLocales[language][0]).camelCase()}($factoryArguments);''');
     } else if (!languageToScriptCodes.containsKey(language)) { // Does not distinguish between scripts. Switch on countryCode directly.
       output.writeln('''
     case '$language': {
@@ -279,11 +308,11 @@ $factoryDeclaration
         final String countryCode = locale.countryCode;
         output.writeln('''
         case '$countryCode':
-          return $generatedClassPrefix${camelCase(locale)}($factoryArguments);''');
+          return $generatedClassPrefix${locale.camelCase()}($factoryArguments);''');
       }
       output.writeln('''
       }
-      return $generatedClassPrefix${camelCase(LocaleInfo.fromString(language))}($factoryArguments);
+      return $generatedClassPrefix${LocaleInfo.fromString(language).camelCase()}($factoryArguments);
     }''');
     } else { // Language has scriptCode, add additional switch logic.
       bool hasCountryCode = false;
@@ -309,7 +338,7 @@ $factoryDeclaration
             final String countryCode = locale.countryCode;
             output.writeln('''
             case '$countryCode':
-              return $generatedClassPrefix${camelCase(locale)}($factoryArguments);''');
+              return $generatedClassPrefix${locale.camelCase()}($factoryArguments);''');
           }
         }
         // Return a fallback locale that matches scriptCode, but not countryCode.
@@ -321,7 +350,7 @@ $factoryDeclaration
           }''');
           }
           output.writeln('''
-          return $generatedClassPrefix${camelCase(scriptLocale)}($factoryArguments);
+          return $generatedClassPrefix${scriptLocale.camelCase()}($factoryArguments);
         }''');
         } else {
           // Not Explicitly defined, fallback to first locale with the same language and
@@ -334,7 +363,7 @@ $factoryDeclaration
           }''');
             }
             output.writeln('''
-          return $generatedClassPrefix${camelCase(scriptLocale)}($factoryArguments);
+          return $generatedClassPrefix${scriptLocale.camelCase()}($factoryArguments);
         }''');
             break;
           }
@@ -354,13 +383,13 @@ $factoryDeclaration
           final String countryCode = locale.countryCode;
           output.writeln('''
         case '$countryCode':
-          return $generatedClassPrefix${camelCase(locale)}($factoryArguments);''');
+          return $generatedClassPrefix${locale.camelCase()}($factoryArguments);''');
         }
         output.writeln('''
       }''');
       }
       output.writeln('''
-      return $generatedClassPrefix${camelCase(LocaleInfo.fromString(language))}($factoryArguments);
+      return $generatedClassPrefix${LocaleInfo.fromString(language).camelCase()}($factoryArguments);
     }''');
     }
   }
@@ -464,10 +493,7 @@ String generateValue(String value, Map<String, dynamic> attributes, LocaleInfo l
         return _scriptCategoryToEnum[value];
     }
   }
-  // Localization strings for the Kannada locale ('kn') are encoded because
-  // some of the localized strings contain characters that can crash Emacs on Linux.
-  // See packages/flutter_localizations/lib/src/l10n/README for more information.
-  return locale.languageCode == 'kn' ? generateEncodedString(value) : generateString(value);
+  return  generateEncodedString(locale.languageCode, value);
 }
 
 /// Combines [generateType], [generateKey], and [generateValue] to return
@@ -483,7 +509,7 @@ String generateGetter(String key, String value, Map<String, dynamic> attributes,
   $type get $key => $value;''';
 }
 
-Future<void> main(List<String> rawArgs) async {
+void main(List<String> rawArgs) {
   checkCwdIsRepoRoot('gen_localizations');
   final GeneratorOptions options = parseArgs(rawArgs);
 
@@ -502,7 +528,17 @@ Future<void> main(List<String> rawArgs) async {
     exitWithError('$exception');
   }
 
-  await precacheLanguageAndRegionTags();
+  // Only rewrite material_kn.arb and cupertino_en.arb if overwriting the
+  // Material and Cupertino localizations files.
+  if (options.writeToFile) {
+    // Encodes the material_kn.arb file and the cupertino_en.arb files before
+    // generating localizations. This prevents a subset of Emacs users from
+    // crashing when opening up the Flutter source code.
+    // See https://github.com/flutter/flutter/issues/36704 for more context.
+    encodeKnArbFiles(directory);
+  }
+
+  precacheLanguageAndRegionTags();
 
   // Maps of locales to resource key/value pairs for Material ARBs.
   final Map<LocaleInfo, Map<String, String>> materialLocaleToResources = <LocaleInfo, Map<String, String>>{};

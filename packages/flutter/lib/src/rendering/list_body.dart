@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'box.dart';
@@ -63,6 +65,7 @@ class RenderListBody extends RenderBox
 
   @override
   void performLayout() {
+    final BoxConstraints constraints = this.constraints;
     assert(() {
       switch (mainAxis) {
         case Axis.horizontal:
@@ -104,7 +107,7 @@ class RenderListBody extends RenderBox
       throw FlutterError.fromParts(<DiagnosticsNode>[
         ErrorSummary('RenderListBody must have a bounded constraint for its cross axis.'),
         ErrorDescription(
-          'RenderListBody forces its children to expand to fit the RenderListBody\'s container, '
+          "RenderListBody forces its children to expand to fit the RenderListBody's container, "
           'so it must be placed in a parent that constrains the cross '
           'axis to a finite dimension.'
         ),

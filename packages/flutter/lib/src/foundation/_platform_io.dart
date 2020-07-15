@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:io';
 import 'assertions.dart';
 import 'platform.dart' as platform;
@@ -9,14 +11,18 @@ import 'platform.dart' as platform;
 /// The dart:io implementation of [platform.defaultTargetPlatform].
 platform.TargetPlatform get defaultTargetPlatform {
   platform.TargetPlatform result;
-  if (Platform.isIOS) {
-    result = platform.TargetPlatform.iOS;
-  } else if (Platform.isMacOS) {
-    result = platform.TargetPlatform.macOS;
-  } else if (Platform.isAndroid) {
+  if (Platform.isAndroid) {
     result = platform.TargetPlatform.android;
+  } else if (Platform.isIOS) {
+    result = platform.TargetPlatform.iOS;
   } else if (Platform.isFuchsia) {
     result = platform.TargetPlatform.fuchsia;
+  } else if (Platform.isLinux) {
+    result = platform.TargetPlatform.linux;
+  } else if (Platform.isMacOS) {
+    result = platform.TargetPlatform.macOS;
+  } else if (Platform.isWindows) {
+    result = platform.TargetPlatform.windows;
   }
   assert(() {
     if (Platform.environment.containsKey('FLUTTER_TEST'))

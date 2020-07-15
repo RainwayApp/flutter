@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' show hashValues;
 
 import 'package:meta/meta.dart';
@@ -82,7 +84,7 @@ class ValueKey<T> extends LocalKey {
 
   @override
   String toString() {
-    final String valueString = T == String ? '<\'$value\'>' : '<$value>';
+    final String valueString = T == String ? "<'$value'>" : '<$value>';
     // The crazy on the next line is a workaround for
     // https://github.com/dart-lang/sdk/issues/33297
     if (runtimeType == _TypeLiteral<ValueKey<T>>().type)

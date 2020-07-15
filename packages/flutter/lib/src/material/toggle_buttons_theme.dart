@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
@@ -24,7 +26,8 @@ import 'theme.dart';
 ///
 ///  * [ToggleButtonsTheme], which describes the actual configuration of a
 ///    toggle buttons theme.
-class ToggleButtonsThemeData extends Diagnosticable {
+@immutable
+class ToggleButtonsThemeData with Diagnosticable {
   /// Creates the set of color and border properties used to configure
   /// [ToggleButtons].
   const ToggleButtonsThemeData({

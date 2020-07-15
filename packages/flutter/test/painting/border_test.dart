@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,6 +35,15 @@ void main() {
     expect(border.top, same(side1));
     expect(border.right, same(side2));
     expect(border.bottom, same(side1));
+    const Border border2 = Border.symmetric(
+      vertical: side1,
+      horizontal: side2,
+      invertMeaningOfVerticalAndHorizontal: false,
+    );
+    expect(border2.left, same(side1));
+    expect(border2.top, same(side2));
+    expect(border2.right, same(side1));
+    expect(border2.bottom, same(side2));
   });
 
   test('Border.merge', () {

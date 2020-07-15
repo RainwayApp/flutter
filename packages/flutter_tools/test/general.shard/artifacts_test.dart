@@ -3,15 +3,14 @@
 // found in the LICENSE file.
 
 import 'package:file/memory.dart';
-import 'package:flutter_tools/src/base/logger.dart';
-import 'package:flutter_tools/src/base/os.dart';
-import 'package:mockito/mockito.dart';
-import 'package:platform/platform.dart';
-
 import 'package:flutter_tools/src/artifacts.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
+import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/os.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/cache.dart';
+import 'package:mockito/mockito.dart';
 
 import '../src/common.dart';
 import '../src/context.dart';
@@ -32,7 +31,7 @@ void main() {
         rootOverride: cacheRoot,
         fileSystem: fileSystem,
         platform: platform,
-        logger: MockLogger(),
+        logger: BufferLogger.test(),
         osUtils: MockOperatingSystemUtils(),
       );
       artifacts = CachedArtifacts(
@@ -50,6 +49,41 @@ void main() {
       expect(
         artifacts.getArtifactPath(Artifact.flutterTester),
         fileSystem.path.join('root', 'bin', 'cache', 'artifacts', 'engine', 'linux-x64', 'flutter_tester'),
+      );
+    });
+
+    testWithoutContext('precompiled web artifact paths are correct', () {
+      expect(
+        artifacts.getArtifactPath(Artifact.webPrecompiledSdk),
+        'root/bin/cache/flutter_web_sdk/kernel/amd/dart_sdk.js',
+      );
+      expect(
+        artifacts.getArtifactPath(Artifact.webPrecompiledSdkSourcemaps),
+        'root/bin/cache/flutter_web_sdk/kernel/amd/dart_sdk.js.map',
+      );
+      expect(
+        artifacts.getArtifactPath(Artifact.webPrecompiledCanvaskitSdk),
+        'root/bin/cache/flutter_web_sdk/kernel/amd-canvaskit/dart_sdk.js',
+      );
+      expect(
+        artifacts.getArtifactPath(Artifact.webPrecompiledCanvaskitSdkSourcemaps),
+        'root/bin/cache/flutter_web_sdk/kernel/amd-canvaskit/dart_sdk.js.map',
+      );
+      expect(
+        artifacts.getArtifactPath(Artifact.webPrecompiledSoundSdk),
+        'root/bin/cache/flutter_web_sdk/kernel/amd-sound/dart_sdk.js',
+      );
+      expect(
+        artifacts.getArtifactPath(Artifact.webPrecompiledSoundSdkSourcemaps),
+        'root/bin/cache/flutter_web_sdk/kernel/amd-sound/dart_sdk.js.map',
+      );
+      expect(
+        artifacts.getArtifactPath(Artifact.webPrecompiledCanvaskitSoundSdk),
+        'root/bin/cache/flutter_web_sdk/kernel/amd-canvaskit-sound/dart_sdk.js',
+      );
+      expect(
+        artifacts.getArtifactPath(Artifact.webPrecompiledCanvaskitSoundSdkSourcemaps),
+        'root/bin/cache/flutter_web_sdk/kernel/amd-canvaskit-sound/dart_sdk.js.map',
       );
     });
 
@@ -84,10 +118,10 @@ void main() {
         rootOverride: cacheRoot,
         fileSystem: fileSystem,
         platform: platform,
-        logger: MockLogger(),
+        logger: BufferLogger.test(),
         osUtils: MockOperatingSystemUtils(),
       );
-      artifacts = LocalEngineArtifacts(fileSystem.currentDirectory.path,
+      artifacts = LocalEngineArtifacts(
         fileSystem.path.join(fileSystem.currentDirectory.path, 'out', 'android_debug_unopt'),
         fileSystem.path.join(fileSystem.currentDirectory.path, 'out', 'host_debug_unopt'),
         cache: cache,
@@ -128,7 +162,7 @@ void main() {
     });
 
     testWithoutContext('Looks up dart.exe on windows platforms', () async {
-      artifacts = LocalEngineArtifacts(fileSystem.currentDirectory.path,
+      artifacts = LocalEngineArtifacts(
         fileSystem.path.join(fileSystem.currentDirectory.path, 'out', 'android_debug_unopt'),
         fileSystem.path.join(fileSystem.currentDirectory.path, 'out', 'host_debug_unopt'),
         cache: cache,
@@ -146,5 +180,4 @@ void main() {
   });
 }
 
-class MockLogger extends Mock implements Logger {}
 class MockOperatingSystemUtils extends Mock implements OperatingSystemUtils {}

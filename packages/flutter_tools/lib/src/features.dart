@@ -6,7 +6,6 @@ import 'package:meta/meta.dart';
 
 import 'base/context.dart';
 import 'globals.dart' as globals;
-import 'version.dart';
 
 /// The current [FeatureFlags] implementation.
 ///
@@ -35,17 +34,14 @@ class FeatureFlags {
   /// Whether flutter desktop for Windows is enabled.
   bool get isWindowsEnabled => isEnabled(flutterWindowsDesktopFeature);
 
-  /// Whether the Android embedding V2 is enabled.
-  bool get isAndroidEmbeddingV2Enabled => isEnabled(flutterAndroidEmbeddingV2Feature);
-
-  /// Whether the web incremental compiler is enabled.
-  bool get isWebIncrementalCompilerEnabled => isEnabled(flutterWebIncrementalCompiler);
+  /// Whether fast single widget reloads are enabled.
+  bool get isSingleWidgetReloadEnabled => isEnabled(singleWidgetReload);
 
   /// Whether a particular feature is enabled for the current channel.
   ///
   /// Prefer using one of the specific getters above instead of this API.
   bool isEnabled(Feature feature) {
-    final String currentChannel = FlutterVersion.instance.channel;
+    final String currentChannel = globals.flutterVersion.channel;
     final FeatureChannelSetting featureSetting = feature.getSettingForChannel(currentChannel);
     if (!featureSetting.available) {
       return false;
@@ -72,8 +68,7 @@ const List<Feature> allFeatures = <Feature>[
   flutterLinuxDesktopFeature,
   flutterMacOSDesktopFeature,
   flutterWindowsDesktopFeature,
-  flutterAndroidEmbeddingV2Feature,
-  flutterWebIncrementalCompiler,
+  singleWidgetReload,
 ];
 
 /// The [Feature] for flutter web.
@@ -119,6 +114,10 @@ const Feature flutterLinuxDesktopFeature = Feature(
     available: true,
     enabledByDefault: false,
   ),
+  dev: FeatureChannelSetting(
+    available: true,
+    enabledByDefault: false,
+  ),
 );
 
 /// The [Feature] for Windows desktop.
@@ -132,39 +131,23 @@ const Feature flutterWindowsDesktopFeature = Feature(
   ),
 );
 
-/// The [Feature] for generating projects using the new Android embedding.
-const Feature flutterAndroidEmbeddingV2Feature = Feature(
-  name: 'flutter create generates projects using the Android embedding V2',
-  environmentOverride: 'ENABLE_ANDROID_EMBEDDING_V2',
-  configSetting: 'enable-android-embedding-v2',
-  beta: FeatureChannelSetting(
-    available: true,
-    enabledByDefault: true,
-  ),
-  dev: FeatureChannelSetting(
-    available: true,
-    enabledByDefault: true,
-  ),
-  master: FeatureChannelSetting(
-    available: true,
-    enabledByDefault: true,
-  ),
-  stable: FeatureChannelSetting(
-    available: true,
-    enabledByDefault: true,
-  ),
-);
-
-/// The [Feature] for using the incremental compiler instead of build runner.
-const Feature flutterWebIncrementalCompiler = Feature(
-  name: 'Enable the incremental compiler for web builds',
-  configSetting: 'enable-web-incremental-compiler',
-  environmentOverride: 'WEB_INCREMENTAL_COMPILER',
+/// The fast hot reload feature for https://github.com/flutter/flutter/issues/61407.
+const Feature singleWidgetReload = Feature(
+  name: 'Hot reload optimization for changes to class body of a single widget',
+  configSetting: 'single-widget-reload-optimization',
   master: FeatureChannelSetting(
     available: true,
     enabledByDefault: false,
   ),
   dev: FeatureChannelSetting(
+    available: true,
+    enabledByDefault: false,
+  ),
+  beta: FeatureChannelSetting(
+    available: true,
+    enabledByDefault: false,
+  ),
+  stable: FeatureChannelSetting(
     available: true,
     enabledByDefault: false,
   ),

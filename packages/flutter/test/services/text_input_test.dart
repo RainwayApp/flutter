@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:convert' show utf8;
 
 import 'package:flutter/services.dart';
@@ -63,6 +65,10 @@ void main() {
   });
 
   group('TextInputConfiguration', () {
+    tearDown(() {
+      TextInputConnection.debugResetId();
+    });
+
     test('sets expected defaults', () {
       const TextInputConfiguration configuration = TextInputConfiguration();
       expect(configuration.inputType, TextInputType.text);
@@ -163,6 +169,55 @@ void main() {
 
       expect(client.latestMethodCall, 'connectionClosed');
     });
+
+    test('TextInputClient showAutocorrectionPromptRect method is called', () async {
+      // Assemble a TextInputConnection so we can verify its change in state.
+      final FakeTextInputClient client = FakeTextInputClient(null);
+      const TextInputConfiguration configuration = TextInputConfiguration();
+      TextInput.attach(client, configuration);
+
+      expect(client.latestMethodCall, isEmpty);
+
+      // Send onConnectionClosed message.
+      final ByteData messageBytes = const JSONMessageCodec().encodeMessage(<String, dynamic>{
+        'args': <dynamic>[1, 0, 1],
+        'method': 'TextInputClient.showAutocorrectionPromptRect',
+      });
+      await ServicesBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+        'flutter/textinput',
+        messageBytes,
+        (ByteData _) {},
+      );
+
+      expect(client.latestMethodCall, 'showAutocorrectionPromptRect');
+    });
+  });
+
+  test('TextEditingValue.isComposingRangeValid', () async {
+    // The composing range is empty.
+    expect(const TextEditingValue(text: '').isComposingRangeValid, isFalse);
+
+    expect(
+      const TextEditingValue(text: 'test', composing: TextRange(start: 1, end: 0)).isComposingRangeValid,
+      isFalse,
+    );
+
+    // The composing range is out of range for the text.
+    expect(
+      const TextEditingValue(text: 'test', composing: TextRange(start: 1, end: 5)).isComposingRangeValid,
+      isFalse,
+    );
+
+    // The composing range is out of range for the text.
+    expect(
+      const TextEditingValue(text: 'test', composing: TextRange(start: -1, end: 4)).isComposingRangeValid,
+      isFalse,
+    );
+
+    expect(
+      const TextEditingValue(text: 'test', composing: TextRange(start: 1, end: 4)).isComposingRangeValid,
+      isTrue,
+    );
   });
 }
 
@@ -173,6 +228,9 @@ class FakeTextInputClient implements TextInputClient {
 
   @override
   TextEditingValue currentTextEditingValue;
+
+  @override
+  AutofillScope get currentAutofillScope => null;
 
   @override
   void performAction(TextInputAction action) {
@@ -192,6 +250,11 @@ class FakeTextInputClient implements TextInputClient {
   @override
   void connectionClosed() {
     latestMethodCall = 'connectionClosed';
+  }
+
+  @override
+  void showAutocorrectionPromptRect(int start, int end) {
+    latestMethodCall = 'showAutocorrectionPromptRect';
   }
 
   TextInputConfiguration get configuration => const TextInputConfiguration();
@@ -233,7 +296,14 @@ class FakeTextChannel implements MethodChannel {
   }
 
   @override
+  bool checkMethodCallHandler(Future<void> Function(MethodCall call) handler) => throw UnimplementedError();
+
+
+  @override
   void setMockMethodCallHandler(Future<void> Function(MethodCall call) handler)  => throw UnimplementedError();
+
+  @override
+  bool checkMockMethodCallHandler(Future<void> Function(MethodCall call) handler) => throw UnimplementedError();
 
   void validateOutgoingMethodCalls(List<MethodCall> calls) {
     expect(outgoingCalls.length, calls.length);

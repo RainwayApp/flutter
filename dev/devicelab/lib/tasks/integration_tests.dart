@@ -71,9 +71,6 @@ TaskFunction createCodegenerationIntegrationTest() {
   return DriverTest(
     '${flutterDirectory.path}/dev/integration_tests/codegen',
     'lib/main.dart',
-    environment: <String, String>{
-      'FLUTTER_EXPERIMENTAL_BUILD': 'true',
-    },
   );
 }
 
@@ -107,6 +104,8 @@ TaskFunction createAndroidSplashScreenKitchenSinkTest() {
   );
 }
 
+/// Executes a driver test that takes a screenshot and compares it against a golden image.
+/// The golden image is served by Flutter Gold (https://flutter-gold.skia.org/).
 TaskFunction createFlutterDriverScreenshotTest() {
   return DriverTest(
     '${flutterDirectory.path}/dev/integration_tests/flutter_driver_screenshot_test',
@@ -114,8 +113,14 @@ TaskFunction createFlutterDriverScreenshotTest() {
   );
 }
 
-class DriverTest {
+TaskFunction createIOSPlatformViewTests() {
+  return DriverTest(
+    '${flutterDirectory.path}/dev/integration_tests/ios_platform_view_tests',
+    'lib/main.dart',
+  );
+}
 
+class DriverTest {
   DriverTest(
     this.testDirectory,
     this.testTarget, {

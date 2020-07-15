@@ -10,7 +10,7 @@ import '../project.dart';
 import '../runner/flutter_command.dart';
 
 class InjectPluginsCommand extends FlutterCommand {
-  InjectPluginsCommand({ this.hidden = false }) {
+  InjectPluginsCommand() {
     requiresPubspecYaml();
   }
 
@@ -21,7 +21,7 @@ class InjectPluginsCommand extends FlutterCommand {
   final String description = 'Re-generates the GeneratedPluginRegistrants.';
 
   @override
-  final bool hidden;
+  final bool hidden = true;
 
   @override
   Future<Set<DevelopmentArtifact>> get requiredArtifacts async => const <DevelopmentArtifact>{};
@@ -29,7 +29,7 @@ class InjectPluginsCommand extends FlutterCommand {
   @override
   Future<FlutterCommandResult> runCommand() async {
     final FlutterProject project = FlutterProject.current();
-    refreshPluginsList(project, checkProjects: true);
+    await refreshPluginsList(project, checkProjects: true);
     await injectPlugins(project, checkProjects: true);
     final bool result = hasPlugins(project);
     if (result) {

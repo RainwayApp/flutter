@@ -70,26 +70,32 @@ $assetsSection
   Future<void> buildAndVerifyAssets(
     List<String> assets,
     List<String> packages,
-    String expectedAssetManifest,
-  ) async {
+    String expectedAssetManifest, {
+    bool expectExists = true,
+  }) async {
     final AssetBundle bundle = AssetBundleFactory.instance.createBundle();
-    await bundle.build(manifestPath: 'pubspec.yaml');
+    await bundle.build(manifestPath: 'pubspec.yaml', packagesPath: '.packages');
 
     for (final String packageName in packages) {
       for (final String asset in assets) {
         final String entryKey = Uri.encodeFull('packages/$packageName/$asset');
-        expect(bundle.entries.containsKey(entryKey), true, reason: 'Cannot find key on bundle: $entryKey');
-        expect(
-          utf8.decode(await bundle.entries[entryKey].contentsAsBytes()),
-          asset,
-        );
+        expect(bundle.entries.containsKey(entryKey), expectExists,
+          reason: 'Cannot find key on bundle: $entryKey');
+        if (expectExists) {
+          expect(
+            utf8.decode(await bundle.entries[entryKey].contentsAsBytes()),
+            asset,
+          );
+        }
       }
     }
 
-    expect(
-      utf8.decode(await bundle.entries['AssetManifest.json'].contentsAsBytes()),
-      expectedAssetManifest,
-    );
+    if (expectExists) {
+      expect(
+        utf8.decode(await bundle.entries['AssetManifest.json'].contentsAsBytes()),
+        expectedAssetManifest,
+      );
+    }
   }
 
   void writeAssets(String path, List<String> assets) {
@@ -123,7 +129,7 @@ $assetsSection
       writePubspecFile('p/p/pubspec.yaml', 'test_package');
 
       final AssetBundle bundle = AssetBundleFactory.instance.createBundle();
-      await bundle.build(manifestPath: 'pubspec.yaml');
+      await bundle.build(manifestPath: 'pubspec.yaml', packagesPath: '.packages');
       expect(bundle.entries.length, 3); // LICENSE, AssetManifest, FontManifest
       const String expectedAssetManifest = '{}';
       expect(
@@ -151,7 +157,7 @@ $assetsSection
       writeAssets('p/p/', assets);
 
       final AssetBundle bundle = AssetBundleFactory.instance.createBundle();
-      await bundle.build(manifestPath: 'pubspec.yaml');
+      await bundle.build(manifestPath: 'pubspec.yaml', packagesPath: '.packages');
       expect(bundle.entries.length, 3); // LICENSE, AssetManifest, FontManifest
       const String expectedAssetManifest = '{}';
       expect(
@@ -167,7 +173,8 @@ $assetsSection
       ProcessManager: () => FakeProcessManager.any(),
     });
 
-    testUsingContext('One asset is bundled when the package has and lists one asset its pubspec', () async {
+    testUsingContext('One asset is bundled when the package has and lists one '
+      'asset its pubspec', () async {
       establishFlutterRoot();
       writeEmptySchemaFile(globals.fs);
 
@@ -195,7 +202,8 @@ $assetsSection
       ProcessManager: () => FakeProcessManager.any(),
     });
 
-    testUsingContext("One asset is bundled when the package has one asset, listed in the app's pubspec", () async {
+    testUsingContext('One asset is bundled when the package has one asset, '
+      "listed in the app's pubspec", () async {
       establishFlutterRoot();
       writeEmptySchemaFile(globals.fs);
 
@@ -223,7 +231,8 @@ $assetsSection
       ProcessManager: () => FakeProcessManager.any(),
     });
 
-    testUsingContext('One asset and its variant are bundled when the package has an asset and a variant, and lists the asset in its pubspec', () async {
+    testUsingContext('One asset and its variant are bundled when the package '
+      'has an asset and a variant, and lists the asset in its pubspec', () async {
       establishFlutterRoot();
       writeEmptySchemaFile(globals.fs);
 
@@ -251,7 +260,8 @@ $assetsSection
       ProcessManager: () => FakeProcessManager.any(),
     });
 
-    testUsingContext('One asset and its variant are bundled when the package has an asset and a variant, and the app lists the asset in its pubspec', () async {
+    testUsingContext('One asset and its variant are bundled when the package '
+      'has an asset and a variant, and the app lists the asset in its pubspec', () async {
       establishFlutterRoot();
       writeEmptySchemaFile(globals.fs);
 
@@ -282,7 +292,8 @@ $assetsSection
       ProcessManager: () => FakeProcessManager.any(),
     });
 
-    testUsingContext('Two assets are bundled when the package has and lists two assets in its pubspec', () async {
+    testUsingContext('Two assets are bundled when the package has and lists '
+      'two assets in its pubspec', () async {
       establishFlutterRoot();
       writeEmptySchemaFile(globals.fs);
 
@@ -430,7 +441,8 @@ $assetsSection
       ProcessManager: () => FakeProcessManager.any(),
     });
 
-    testUsingContext('One asset is bundled when the app depends on a package, listing in its pubspec an asset from another package', () async {
+    testUsingContext('One asset is bundled when the app depends on a package, '
+      'listing in its pubspec an asset from another package', () async {
       establishFlutterRoot();
       writeEmptySchemaFile(globals.fs);
       writePubspecFile(
@@ -577,8 +589,10 @@ $assetsSection
       writeAssets('p/p/', assetsOnDisk);
 
       final AssetBundle bundle = AssetBundleFactory.instance.createBundle();
-      await bundle.build(manifestPath: 'pubspec.yaml');
-      assert(bundle.entries['AssetManifest.json'] == null,'Invalid pubspec.yaml should not generate AssetManifest.json'  );
+      await bundle.build(manifestPath: 'pubspec.yaml', packagesPath: '.packages');
+
+      expect(bundle.entries['AssetManifest.json'], isNull,
+        reason: 'Invalid pubspec.yaml should not generate AssetManifest.json'  );
     }, overrides: <Type, Generator>{
       FileSystem: () => testFileSystem,
       ProcessManager: () => FakeProcessManager.any(),
@@ -660,24 +674,15 @@ $assetsSection
         assets: assetOnManifest,
       );
 
-      try {
-        await buildAndVerifyAssets(
-          assetOnManifest,
-          <String>['test_package'],
-          null,
-        );
-
-        final Function watchdog = () async {
-          assert(false, 'Code failed to detect missing directory. Test failed.');
-        };
-        watchdog();
-      } catch (e) {
-        // Test successful
-      }
+      await buildAndVerifyAssets(
+        assetOnManifest,
+        <String>['test_package'],
+        null,
+        expectExists: false,
+      );
     }, overrides: <Type, Generator>{
       FileSystem: () => testFileSystem,
       ProcessManager: () => FakeProcessManager.any(),
     });
-
   });
 }

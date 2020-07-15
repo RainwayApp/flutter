@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -117,7 +119,7 @@ void main() {
     expect(decoration.color, equals(theme.primaryColorLight));
 
     final RenderParagraph paragraph = tester.renderObject(find.text('Z'));
-    expect(paragraph.text.style.color, equals(theme.primaryTextTheme.title.color));
+    expect(paragraph.text.style.color, equals(theme.primaryTextTheme.headline6.color));
   });
 
   testWidgets('CircleAvatar with dark theme', (WidgetTester tester) async {
@@ -142,7 +144,7 @@ void main() {
     expect(decoration.color, equals(theme.primaryColorDark));
 
     final RenderParagraph paragraph = tester.renderObject(find.text('Z'));
-    expect(paragraph.text.style.color, equals(theme.primaryTextTheme.title.color));
+    expect(paragraph.text.style.color, equals(theme.primaryTextTheme.headline6.color));
   });
 
   testWidgets('CircleAvatar text does not expand with textScaleFactor', (WidgetTester tester) async {
@@ -186,7 +188,7 @@ void main() {
       ),
     );
     expect(tester.getSize(find.text('Z')), equals(const Size(16.0, 16.0)));
-  }, skip: isBrowser);
+  });
 
   testWidgets('CircleAvatar respects minRadius', (WidgetTester tester) async {
     final Color backgroundColor = Colors.blue.shade900;

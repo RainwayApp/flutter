@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,7 +27,7 @@ void main() {
     );
 
     final Container container = _getContainerFromBanner(tester);
-    expect(container.decoration, const BoxDecoration(color: color));
+    expect(container.color, color);
   });
 
   testWidgets('Custom content TextStyle respected', (WidgetTester tester) async {

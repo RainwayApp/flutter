@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -36,6 +38,8 @@ void main() {
       ),
       onSelectionChanged: (_, __, ___) { },
     );
+    editable.layout(BoxConstraints.loose(const Size(1000.0, 1000.0)));
+
     final PipelineOwner owner = PipelineOwner(onNeedVisualUpdate: () { });
     final _PointerRouterSpy spy = GestureBinding.instance.pointerRouter as _PointerRouterSpy;
     editable.attach(owner);

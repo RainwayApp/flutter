@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/rendering.dart';
@@ -189,7 +191,7 @@ void main() {
               Semantics(
                 label: 'node 1',
                 selected: true,
-                child: Container(
+                child: const SizedBox(
                   width: 10.0,
                   height: 10.0,
                 ),
@@ -197,7 +199,7 @@ void main() {
               Semantics(
                 label: 'node 2',
                 selected: true,
-                child: Container(
+                child: const SizedBox(
                   width: 10.0,
                   height: 10.0,
                 ),
@@ -205,7 +207,7 @@ void main() {
               Semantics(
                 label: 'node 3',
                 selected: true,
-                child: Container(
+                child: const SizedBox(
                   width: 10.0,
                   height: 10.0,
                 ),

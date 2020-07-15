@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 /// The Flutter painting library.
 ///
 /// To use, import `package:flutter/painting.dart`.
@@ -17,7 +19,7 @@
 ///    painting boxes.
 library painting;
 
-export 'dart:ui' show Shadow, PlaceholderAlignment;
+export 'dart:ui' show Shadow, PlaceholderAlignment, TextHeightBehavior;
 
 export 'src/painting/alignment.dart';
 export 'src/painting/basic_types.dart';

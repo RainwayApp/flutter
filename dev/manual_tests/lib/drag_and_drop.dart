@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -100,7 +99,7 @@ class ExampleDragSource extends StatelessWidget {
       size *= kHeavyMultiplier;
 
     final Widget contents = DefaultTextStyle(
-      style: Theme.of(context).textTheme.body1,
+      style: Theme.of(context).textTheme.bodyText2,
       textAlign: TextAlign.center,
       child: Dot(
         color: color,
@@ -188,7 +187,7 @@ class MovableBall extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Widget ball = DefaultTextStyle(
-      style: Theme.of(context).primaryTextTheme.body1,
+      style: Theme.of(context).primaryTextTheme.bodyText2,
       textAlign: TextAlign.center,
       child: Dot(
         key: kBallKey,
@@ -296,17 +295,7 @@ class DragAndDropAppState extends State<DragAndDropApp> {
   }
 }
 
-// Sets a platform override for desktop to avoid exceptions. See
-// https://flutter.dev/desktop#target-platform-override for more info.
-// TODO(gspencergoog): Remove once TargetPlatform includes all desktop platforms.
-void _enablePlatformOverrideForDesktop() {
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
-    debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
-  }
-}
-
 void main() {
-  _enablePlatformOverrideForDesktop();
   runApp(MaterialApp(
     title: 'Drag and Drop Flutter Demo',
     home: DragAndDropApp(),

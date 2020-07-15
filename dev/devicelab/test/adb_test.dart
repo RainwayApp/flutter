@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:collection/collection.dart' show ListEquality, MapEquality;
 
 import 'package:flutter_devicelab/framework/adb.dart';
+import 'package:meta/meta.dart';
 
 import 'common.dart';
 
@@ -41,6 +42,7 @@ void main() {
       test('sends power event', () async {
         await device.togglePower();
         expectLog(<CommandArgs>[
+          cmd(command: 'getprop', arguments: <String>['ro.bootimage.build.fingerprint', ';', 'getprop', 'ro.build.version.release', ';', 'getprop', 'ro.build.version.sdk'], environment: null),
           cmd(command: 'input', arguments: <String>['keyevent', '26']),
         ]);
       });
@@ -51,6 +53,7 @@ void main() {
         FakeDevice.pretendAwake();
         await device.wakeUp();
         expectLog(<CommandArgs>[
+          cmd(command: 'getprop', arguments: <String>['ro.bootimage.build.fingerprint', ';', 'getprop', 'ro.build.version.release', ';', 'getprop', 'ro.build.version.sdk'], environment: null),
           cmd(command: 'dumpsys', arguments: <String>['power']),
         ]);
       });
@@ -59,6 +62,7 @@ void main() {
         FakeDevice.pretendAsleep();
         await device.wakeUp();
         expectLog(<CommandArgs>[
+          cmd(command: 'getprop', arguments: <String>['ro.bootimage.build.fingerprint', ';', 'getprop', 'ro.build.version.release', ';', 'getprop', 'ro.build.version.sdk'], environment: null),
           cmd(command: 'dumpsys', arguments: <String>['power']),
           cmd(command: 'input', arguments: <String>['keyevent', '26']),
         ]);
@@ -70,6 +74,7 @@ void main() {
         FakeDevice.pretendAsleep();
         await device.sendToSleep();
         expectLog(<CommandArgs>[
+          cmd(command: 'getprop', arguments: <String>['ro.bootimage.build.fingerprint', ';', 'getprop', 'ro.build.version.release', ';', 'getprop', 'ro.build.version.sdk'], environment: null),
           cmd(command: 'dumpsys', arguments: <String>['power']),
         ]);
       });
@@ -78,6 +83,7 @@ void main() {
         FakeDevice.pretendAwake();
         await device.sendToSleep();
         expectLog(<CommandArgs>[
+          cmd(command: 'getprop', arguments: <String>['ro.bootimage.build.fingerprint', ';', 'getprop', 'ro.build.version.release', ';', 'getprop', 'ro.build.version.sdk'], environment: null),
           cmd(command: 'dumpsys', arguments: <String>['power']),
           cmd(command: 'input', arguments: <String>['keyevent', '26']),
         ]);
@@ -89,6 +95,7 @@ void main() {
         FakeDevice.pretendAwake();
         await device.unlock();
         expectLog(<CommandArgs>[
+          cmd(command: 'getprop', arguments: <String>['ro.bootimage.build.fingerprint', ';', 'getprop', 'ro.build.version.release', ';', 'getprop', 'ro.build.version.sdk'], environment: null),
           cmd(command: 'dumpsys', arguments: <String>['power']),
           cmd(command: 'input', arguments: <String>['keyevent', '82']),
         ]);
@@ -99,6 +106,7 @@ void main() {
       test('tap', () async {
         await device.tap(100, 200);
         expectLog(<CommandArgs>[
+          cmd(command: 'getprop', arguments: <String>['ro.bootimage.build.fingerprint', ';', 'getprop', 'ro.build.version.release', ';', 'getprop', 'ro.build.version.sdk'], environment: null),
           cmd(command: 'input', arguments: <String>['tap', '100', '200']),
         ]);
       });
@@ -124,8 +132,9 @@ CommandArgs cmd({
 
 typedef ExitErrorFactory = dynamic Function();
 
+@immutable
 class CommandArgs {
-  CommandArgs({ this.command, this.arguments, this.environment });
+  const CommandArgs({ this.command, this.arguments, this.environment });
 
   final String command;
   final List<String> arguments;
@@ -181,7 +190,7 @@ class FakeDevice extends AndroidDevice {
   }
 
   @override
-  Future<String> shellEval(String command, List<String> arguments, { Map<String, String> environment }) async {
+  Future<String> shellEval(String command, List<String> arguments, { Map<String, String> environment, bool silent = false }) async {
     commandLog.add(CommandArgs(
       command: command,
       arguments: arguments,
@@ -191,7 +200,7 @@ class FakeDevice extends AndroidDevice {
   }
 
   @override
-  Future<void> shellExec(String command, List<String> arguments, { Map<String, String> environment }) async {
+  Future<void> shellExec(String command, List<String> arguments, { Map<String, String> environment, bool silent = false }) async {
     commandLog.add(CommandArgs(
       command: command,
       arguments: arguments,

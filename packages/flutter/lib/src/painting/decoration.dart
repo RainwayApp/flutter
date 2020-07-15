@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 
 import 'basic_types.dart';
@@ -20,13 +22,13 @@ import 'image_provider.dart';
 /// shared between boxes; [BoxPainter] objects can cache resources to
 /// make painting on a particular surface faster.
 @immutable
-abstract class Decoration extends Diagnosticable {
+abstract class Decoration with Diagnosticable {
   /// Abstract const constructor. This constructor enables subclasses to provide
   /// const constructors so that they can be used in const expressions.
   const Decoration();
 
   @override
-  String toStringShort() => '${objectRuntimeType(this, 'Decoration')}';
+  String toStringShort() => objectRuntimeType(this, 'Decoration');
 
   /// In checked mode, throws an exception if the object is not in a
   /// valid configuration. Otherwise, returns true.
@@ -164,6 +166,7 @@ abstract class Decoration extends Diagnosticable {
   /// The `onChanged` argument configures [BoxPainter.onChanged]. It can be
   /// omitted if there is no chance that the painter will change (for example,
   /// if it is a [BoxDecoration] with definitely no [DecorationImage]).
+  @factory
   BoxPainter createBoxPainter([ VoidCallback onChanged ]);
 
   /// Returns a closed [Path] that describes the outer edge of this decoration.

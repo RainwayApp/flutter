@@ -4,13 +4,14 @@
 
 import 'dart:async';
 
-import 'package:platform/platform.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/process.dart';
 import 'package:flutter_tools/src/base/terminal.dart';
 import 'package:mockito/mockito.dart';
 import 'package:process/process.dart';
+import 'package:quiver/testing/async.dart';
 
 import '../../src/common.dart';
 import '../../src/context.dart';
@@ -18,8 +19,6 @@ import '../../src/mocks.dart' show MockProcess,
                                    MockProcessManager,
                                    MockStdio,
                                    flakyProcessFactory;
-
-class MockLogger extends Mock implements Logger {}
 
 void main() {
   group('process exceptions', () {
@@ -30,7 +29,7 @@ void main() {
       mockProcessManager = PlainMockProcessManager();
       processUtils = ProcessUtils(
         processManager: mockProcessManager,
-        logger: MockLogger(),
+        logger: BufferLogger.test(),
       );
     });
 
@@ -50,7 +49,7 @@ void main() {
       int postProcessRecording;
       int cleanup;
 
-      final ShutdownHooks shutdownHooks = ShutdownHooks(logger: MockLogger());
+      final ShutdownHooks shutdownHooks = ShutdownHooks(logger: BufferLogger.test());
 
       shutdownHooks.addShutdownHook(() async {
         serializeRecording1 = i++;
@@ -87,7 +86,7 @@ void main() {
       mockLogger = BufferLogger(
         terminal: AnsiTerminal(
           stdio: MockStdio(),
-          platform: FakePlatform.fromPlatform(const LocalPlatform())..stdoutSupportsAnsi = false,
+          platform: FakePlatform(stdoutSupportsAnsi: false),
         ),
         outputPreferences: OutputPreferences(wrapText: true, wrapColumn: 40),
       );
@@ -132,11 +131,11 @@ void main() {
       mockProcessManager = MockProcessManager();
       processUtils = ProcessUtils(
         processManager: mockProcessManager,
-        logger: MockLogger(),
+        logger: BufferLogger.test(),
       );
       flakyProcessUtils = ProcessUtils(
         processManager: flakyProcessManager,
-        logger: MockLogger(),
+        logger: BufferLogger.test(),
       );
     });
 
@@ -162,7 +161,7 @@ void main() {
              throwsA(isA<ProcessException>()));
     });
 
-    testWithoutContext(' does not throw on failure with whitelist', () async {
+    testWithoutContext(' does not throw on allowed Failures', () async {
       when(mockProcessManager.run(<String>['kaboom'])).thenAnswer((_) {
         return Future<ProcessResult>.value(ProcessResult(0, 1, '', ''));
       });
@@ -170,13 +169,13 @@ void main() {
         (await processUtils.run(
           <String>['kaboom'],
           throwOnError: true,
-          whiteListFailures: (int c) => c == 1,
+          allowedFailures: (int c) => c == 1,
         )).exitCode,
         1,
       );
     });
 
-    testWithoutContext(' throws on failure when not in whitelist', () async {
+    testWithoutContext(' throws on disallowed failure', () async {
       when(mockProcessManager.run(<String>['kaboom'])).thenAnswer((_) {
         return Future<ProcessResult>.value(ProcessResult(0, 2, '', ''));
       });
@@ -184,7 +183,7 @@ void main() {
         () => processUtils.run(
           <String>['kaboom'],
           throwOnError: true,
-          whiteListFailures: (int c) => c == 1,
+          allowedFailures: (int c) => c == 1,
         ),
         throwsA(isA<ProcessException>()),
       );
@@ -195,11 +194,16 @@ void main() {
         flakes: 1,
         delay: delay,
       );
-      final RunResult result = await flakyProcessUtils.run(
-        <String>['dummy'],
-        timeout: delay + const Duration(seconds: 1),
-      );
-      expect(result.exitCode, -9);
+
+      FakeAsync().run((FakeAsync time) async {
+        final Duration timeout = delay + const Duration(seconds: 1);
+        final RunResult result = await flakyProcessUtils.run(
+          <String>['dummy'],
+          timeout: timeout,
+        );
+        time.elapse(timeout);
+        expect(result.exitCode, -9);
+      });
     });
 
     testWithoutContext(' flaky process succeeds with retry', () async {
@@ -207,12 +211,16 @@ void main() {
         flakes: 1,
         delay: delay,
       );
-      final RunResult result = await flakyProcessUtils.run(
-        <String>['dummy'],
-        timeout: delay - const Duration(milliseconds: 500),
-        timeoutRetries: 1,
-      );
-      expect(result.exitCode, 0);
+      FakeAsync().run((FakeAsync time) async {
+        final Duration timeout = delay - const Duration(milliseconds: 500);
+        final RunResult result = await flakyProcessUtils.run(
+          <String>['dummy'],
+          timeout: timeout,
+          timeoutRetries: 1,
+        );
+        time.elapse(timeout);
+        expect(result.exitCode, 0);
+      });
     });
 
     testWithoutContext(' flaky process generates ProcessException on timeout', () async {
@@ -232,11 +240,15 @@ void main() {
         flakyStdout.complete(<int>[]);
         return true;
       });
-      expect(() => flakyProcessUtils.run(
-        <String>['dummy'],
-        timeout: delay - const Duration(milliseconds: 500),
-        timeoutRetries: 0,
-      ), throwsA(isA<ProcessException>()));
+      FakeAsync().run((FakeAsync time) async {
+        final Duration timeout = delay - const Duration(milliseconds: 500);
+        expect(() => flakyProcessUtils.run(
+          <String>['dummy'],
+          timeout: timeout,
+          timeoutRetries: 0,
+        ), throwsA(isA<ProcessException>()));
+        time.elapse(timeout);
+      });
     });
   });
 
@@ -250,7 +262,7 @@ void main() {
       testLogger = BufferLogger(
         terminal: AnsiTerminal(
           stdio: MockStdio(),
-          platform: FakePlatform.fromPlatform(const LocalPlatform())..stdoutSupportsAnsi = false,
+          platform: FakePlatform(stdinSupportsAnsi: false),
         ),
         outputPreferences: OutputPreferences(wrapText: true, wrapColumn: 40),
       );
@@ -282,7 +294,7 @@ void main() {
              throwsA(isA<ProcessException>()));
     });
 
-    testWithoutContext(' does not throw on failure with whitelist', () async {
+    testWithoutContext(' does not throw on allowed Failures', () async {
       when(mockProcessManager.runSync(<String>['kaboom'])).thenReturn(
         ProcessResult(0, 1, '', '')
       );
@@ -290,12 +302,12 @@ void main() {
         processUtils.runSync(
           <String>['kaboom'],
           throwOnError: true,
-          whiteListFailures: (int c) => c == 1,
+          allowedFailures: (int c) => c == 1,
         ).exitCode,
         1);
     });
 
-    testWithoutContext(' throws on failure when not in whitelist', () async {
+    testWithoutContext(' throws on disallowed failure', () async {
       when(mockProcessManager.runSync(<String>['kaboom'])).thenReturn(
         ProcessResult(0, 2, '', '')
       );
@@ -303,7 +315,7 @@ void main() {
         () => processUtils.runSync(
           <String>['kaboom'],
           throwOnError: true,
-          whiteListFailures: (int c) => c == 1,
+          allowedFailures: (int c) => c == 1,
         ),
         throwsA(isA<ProcessException>()));
     });
@@ -338,14 +350,14 @@ void main() {
   });
 
   group('exitsHappySync', () {
-    ProcessManager mockProcessManager;
+    MockProcessManager mockProcessManager;
     ProcessUtils processUtils;
 
     setUp(() {
       mockProcessManager = MockProcessManager();
       processUtils = ProcessUtils(
         processManager: mockProcessManager,
-        logger: MockLogger(),
+        logger: BufferLogger.test(),
       );
     });
 
@@ -362,32 +374,82 @@ void main() {
       );
       expect(processUtils.exitsHappySync(<String>['boohoo']), isFalse);
     });
+
+    testWithoutContext('catches Exception and returns false', () {
+      when(mockProcessManager.runSync(<String>['boohoo'])).thenThrow(
+        const ProcessException('Process failed', <String>[]),
+      );
+      expect(processUtils.exitsHappySync(<String>['boohoo']), isFalse);
+    });
+
+    testWithoutContext('does not throw Exception and returns false if binary cannot run', () {
+      mockProcessManager.canRunSucceeds = false;
+      expect(processUtils.exitsHappySync(<String>['nonesuch']), isFalse);
+      verifyNever(
+        mockProcessManager.runSync(any, environment: anyNamed('environment')),
+      );
+    });
+
+    testWithoutContext('does not catch ArgumentError', () async {
+      when(mockProcessManager.runSync(<String>['invalid'])).thenThrow(
+        ArgumentError('Bad input'),
+      );
+      expect(
+        () => processUtils.exitsHappySync(<String>['invalid']),
+        throwsArgumentError,
+      );
+    });
   });
 
   group('exitsHappy', () {
-    ProcessManager mockProcessManager;
+    MockProcessManager mockProcessManager;
     ProcessUtils processUtils;
 
     setUp(() {
       mockProcessManager = MockProcessManager();
       processUtils = ProcessUtils(
         processManager: mockProcessManager,
-        logger: MockLogger(),
+        logger: BufferLogger.test(),
       );
     });
 
-    testWithoutContext(' succeeds on success', () async {
+    testWithoutContext('succeeds on success', () async {
       when(mockProcessManager.run(<String>['whoohoo'])).thenAnswer((_) {
         return Future<ProcessResult>.value(ProcessResult(0, 0, '', ''));
       });
       expect(await processUtils.exitsHappy(<String>['whoohoo']), isTrue);
     });
 
-    testWithoutContext(' fails on failure', () async {
+    testWithoutContext('fails on failure', () async {
       when(mockProcessManager.run(<String>['boohoo'])).thenAnswer((_) {
         return Future<ProcessResult>.value(ProcessResult(0, 1, '', ''));
       });
       expect(await processUtils.exitsHappy(<String>['boohoo']), isFalse);
+    });
+
+    testWithoutContext('catches Exception and returns false', () async {
+      when(mockProcessManager.run(<String>['boohoo'])).thenThrow(
+        const ProcessException('Process failed', <String>[]),
+      );
+      expect(await processUtils.exitsHappy(<String>['boohoo']), isFalse);
+    });
+
+    testWithoutContext('does not throw Exception and returns false if binary cannot run', () async {
+      mockProcessManager.canRunSucceeds = false;
+      expect(await processUtils.exitsHappy(<String>['nonesuch']), isFalse);
+      verifyNever(
+        mockProcessManager.runSync(any, environment: anyNamed('environment')),
+      );
+    });
+
+    testWithoutContext('does not catch ArgumentError', () async {
+      when(mockProcessManager.run(<String>['invalid'])).thenThrow(
+        ArgumentError('Bad input'),
+      );
+      expect(
+        () async => await processUtils.exitsHappy(<String>['invalid']),
+        throwsArgumentError,
+      );
     });
   });
 

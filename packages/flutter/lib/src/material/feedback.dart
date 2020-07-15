@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 
 import 'package:flutter/rendering.dart';
@@ -80,7 +82,7 @@ import 'theme.dart';
 /// ```
 /// {@end-tool}
 class Feedback {
-  // This class is not meant to be instatiated or extended; this constructor
+  // This class is not meant to be instantiated or extended; this constructor
   // prevents instantiation and extension.
   // ignore: unused_element
   Feedback._();
@@ -99,9 +101,15 @@ class Feedback {
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
         return SystemSound.play(SystemSoundType.click);
-      default:
+      case TargetPlatform.iOS:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
         return Future<void>.value();
+        break;
     }
+    assert(false, 'Unhandled TargetPlatform ${_platform(context)}');
+    return Future<void>.value();
   }
 
   /// Wraps a [GestureTapCallback] to provide platform specific feedback for a
@@ -138,9 +146,15 @@ class Feedback {
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
         return HapticFeedback.vibrate();
-      default:
+      case TargetPlatform.iOS:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
         return Future<void>.value();
+        break;
     }
+    assert(false, 'Unhandled TargetPlatform ${_platform(context)}');
+    return Future<void>.value();
   }
 
   /// Wraps a [GestureLongPressCallback] to provide platform specific feedback

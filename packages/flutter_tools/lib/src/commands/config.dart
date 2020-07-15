@@ -4,7 +4,6 @@
 
 import 'dart:async';
 
-import '../android/android_sdk.dart';
 import '../android/android_studio.dart';
 import '../base/common.dart';
 import '../convert.dart';
@@ -12,7 +11,6 @@ import '../features.dart';
 import '../globals.dart' as globals;
 import '../reporting/reporting.dart';
 import '../runner/flutter_command.dart';
-import '../version.dart';
 
 class ConfigCommand extends FlutterCommand {
   ConfigCommand({ bool verboseHelp = false }) {
@@ -55,7 +53,7 @@ class ConfigCommand extends FlutterCommand {
     'Configure Flutter settings.\n\n'
     'To remove a setting, configure it to an empty string.\n\n'
     'The Flutter tool anonymously reports feature usage statistics and basic crash reports to help improve '
-    'Flutter tools over time. See Google\'s privacy policy: https://www.google.com/intl/en/policies/privacy/';
+    "Flutter tools over time. See Google's privacy policy: https://www.google.com/intl/en/policies/privacy/";
 
   @override
   final List<String> aliases = <String>['configure'];
@@ -68,7 +66,7 @@ class ConfigCommand extends FlutterCommand {
     // List all config settings. for feature flags, include whether they
     // are available.
     final Map<String, Feature> featuresByName = <String, Feature>{};
-    final String channel = FlutterVersion.instance.channel;
+    final String channel = globals.flutterVersion.channel;
     for (final Feature feature in allFeatures) {
       if (feature.configSetting != null) {
         featuresByName[feature.configSetting] = feature;
@@ -90,7 +88,7 @@ class ConfigCommand extends FlutterCommand {
     }
     return
       '\nSettings:\n$values\n\n'
-      'Analytics reporting is currently ${flutterUsage.enabled ? 'enabled' : 'disabled'}.';
+      'Analytics reporting is currently ${globals.flutterUsage.enabled ? 'enabled' : 'disabled'}.';
   }
 
   /// Return null to disable analytics recording of the `config` command.
@@ -118,7 +116,7 @@ class ConfigCommand extends FlutterCommand {
       // We send the analytics event *before* toggling the flag intentionally
       // to be sure that opt-out events are sent correctly.
       AnalyticsConfigEvent(enabled: value).send();
-      flutterUsage.enabled = value;
+      globals.flutterUsage.enabled = value;
       globals.printStatus('Analytics reporting ${value ? 'enabled' : 'disabled'}.');
     }
 
@@ -173,8 +171,8 @@ class ConfigCommand extends FlutterCommand {
     if (results['android-studio-dir'] == null && androidStudio != null) {
       results['android-studio-dir'] = androidStudio.directory;
     }
-    if (results['android-sdk'] == null && androidSdk != null) {
-      results['android-sdk'] = androidSdk.directory;
+    if (results['android-sdk'] == null && globals.androidSdk != null) {
+      results['android-sdk'] = globals.androidSdk.directory;
     }
 
     globals.printStatus(const JsonEncoder.withIndent('  ').convert(results));

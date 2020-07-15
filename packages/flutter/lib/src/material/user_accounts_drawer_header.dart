@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -147,7 +149,7 @@ class _AccountDetailsState extends State<_AccountDetails> with SingleTickerProvi
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 2.0),
               child: DefaultTextStyle(
-                style: theme.primaryTextTheme.body2,
+                style: theme.primaryTextTheme.bodyText1,
                 overflow: TextOverflow.ellipsis,
                 child: widget.accountName,
               ),
@@ -159,7 +161,7 @@ class _AccountDetailsState extends State<_AccountDetails> with SingleTickerProvi
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 2.0),
               child: DefaultTextStyle(
-                style: theme.primaryTextTheme.body1,
+                style: theme.primaryTextTheme.bodyText2,
                 overflow: TextOverflow.ellipsis,
                 child: widget.accountEmail,
               ),

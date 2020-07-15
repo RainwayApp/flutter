@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:typed_data' show Uint8List;
 import 'dart:ui' as ui show instantiateImageCodec, Codec;
 import 'package:flutter/foundation.dart';
@@ -44,9 +46,9 @@ mixin PaintingBinding on BindingBase, ServicesBinding {
   /// installation or a data wipe. The warm up does not block the main thread
   /// so there should be no "Application Not Responding" warning.
   ///
-  /// Currently the warm-up happens synchronously on the GPU thread which means
-  /// the rendering of the first frame on the GPU thread will be postponed until
-  /// the warm-up is finished.
+  /// Currently the warm-up happens synchronously on the raster thread which
+  /// means the rendering of the first frame on the raster thread will be
+  /// postponed until the warm-up is finished.
   ///
   /// See also:
   ///
@@ -69,26 +71,37 @@ mixin PaintingBinding on BindingBase, ServicesBinding {
   @protected
   ImageCache createImageCache() => ImageCache();
 
-  /// Calls through to [dart:ui] with [decodedCacheRatioCap] from [ImageCache].
+  /// Calls through to [dart:ui] from [ImageCache].
   ///
-  /// The [cacheWidth] and [cacheHeight] parameters, when specified, indicate the
-  /// size to decode the image to.
+  /// The `cacheWidth` and `cacheHeight` parameters, when specified, indicate
+  /// the size to decode the image to.
   ///
-  /// Both [cacheWidth] and [cacheHeight] must be positive values greater than or
-  /// equal to 1 or null. It is valid to specify only one of [cacheWidth] and
-  /// [cacheHeight] with the other remaining null, in which case the omitted
-  /// dimension will decode to its original size. When both are null or omitted,
-  /// the image will be decoded at its native resolution.
+  /// Both `cacheWidth` and `cacheHeight` must be positive values greater than
+  /// or equal to 1, or null. It is valid to specify only one of `cacheWidth`
+  /// and `cacheHeight` with the other remaining null, in which case the omitted
+  /// dimension will be scaled to maintain the aspect ratio of the original
+  /// dimensions. When both are null or omitted, the image will be decoded at
+  /// its native resolution.
+  ///
+  /// The `allowUpscaling` parameter determines whether the `cacheWidth` or
+  /// `cacheHeight` parameters are clamped to the intrinsic width and height of
+  /// the original image. By default, the dimensions are clamped to avoid
+  /// unnecessary memory usage for images. Callers that wish to display an image
+  /// above its native resolution should prefer scaling the canvas the image is
+  /// drawn into.
   Future<ui.Codec> instantiateImageCodec(Uint8List bytes, {
     int cacheWidth,
     int cacheHeight,
+    bool allowUpscaling = false,
   }) {
     assert(cacheWidth == null || cacheWidth > 0);
     assert(cacheHeight == null || cacheHeight > 0);
+    assert(allowUpscaling != null);
     return ui.instantiateImageCodec(
       bytes,
       targetWidth: cacheWidth,
       targetHeight: cacheHeight,
+      allowUpscaling: allowUpscaling,
     );
   }
 
@@ -96,6 +109,13 @@ mixin PaintingBinding on BindingBase, ServicesBinding {
   void evict(String asset) {
     super.evict(asset);
     imageCache.clear();
+    imageCache.clearLiveImages();
+  }
+
+  @override
+  void handleMemoryPressure() {
+    super.handleMemoryPressure();
+    imageCache?.clear();
   }
 
   /// Listenable that notifies when the available fonts on the system have

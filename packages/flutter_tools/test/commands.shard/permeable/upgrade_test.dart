@@ -4,18 +4,16 @@
 
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
-
-import 'package:flutter_tools/src/base/os.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/upgrade.dart';
 import 'package:flutter_tools/src/convert.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/persistent_tool_state.dart';
 import 'package:flutter_tools/src/runner/flutter_command.dart';
 import 'package:flutter_tools/src/version.dart';
 import 'package:mockito/mockito.dart';
-import 'package:platform/platform.dart';
 import 'package:process/process.dart';
-import 'package:flutter_tools/src/globals.dart' as globals;
 
 import '../../src/common.dart';
 import '../../src/context.dart';
@@ -29,7 +27,14 @@ void main() {
     MockProcessManager processManager;
     FakePlatform fakePlatform;
     final MockFlutterVersion flutterVersion = MockFlutterVersion();
-    const GitTagVersion gitTagVersion = GitTagVersion(1, 2, 3, 4, 5, 'asd');
+    const GitTagVersion gitTagVersion = GitTagVersion(
+      x: 1,
+      y: 2,
+      z: 3,
+      hotfix: 4,
+      commits: 5,
+      hash: 'asd',
+    );
     when(flutterVersion.channel).thenReturn('dev');
 
     setUp(() {
@@ -57,10 +62,11 @@ void main() {
 
     testUsingContext('throws on unknown tag, official branch,  noforce', () async {
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        false,
-        false,
-        const GitTagVersion.unknown(),
-        flutterVersion,
+        force: false,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: const GitTagVersion.unknown(),
+        flutterVersion: flutterVersion,
       );
       expect(result, throwsToolExit());
     }, overrides: <Type, Generator>{
@@ -69,10 +75,11 @@ void main() {
 
     testUsingContext('does not throw on unknown tag, official branch, force', () async {
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        true,
-        false,
-        const GitTagVersion.unknown(),
-        flutterVersion,
+        force: true,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: const GitTagVersion.unknown(),
+        flutterVersion: flutterVersion,
       );
       expect(await result, FlutterCommandResult.success());
     }, overrides: <Type, Generator>{
@@ -83,10 +90,11 @@ void main() {
     testUsingContext('throws tool exit with uncommitted changes', () async {
       fakeCommandRunner.willHaveUncomittedChanges = true;
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        false,
-        false,
-        gitTagVersion,
-        flutterVersion,
+        force: false,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: gitTagVersion,
+        flutterVersion: flutterVersion,
       );
       expect(result, throwsToolExit());
     }, overrides: <Type, Generator>{
@@ -97,10 +105,11 @@ void main() {
       fakeCommandRunner.willHaveUncomittedChanges = true;
 
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        true,
-        false,
-        gitTagVersion,
-        flutterVersion,
+        force: true,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: gitTagVersion,
+        flutterVersion: flutterVersion,
       );
       expect(await result, FlutterCommandResult.success());
     }, overrides: <Type, Generator>{
@@ -108,12 +117,13 @@ void main() {
       Platform: () => fakePlatform,
     });
 
-    testUsingContext('Doesn\'t throw on known tag, dev branch, no force', () async {
+    testUsingContext("Doesn't throw on known tag, dev branch, no force", () async {
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        false,
-        false,
-        gitTagVersion,
-        flutterVersion,
+        force: false,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: gitTagVersion,
+        flutterVersion: flutterVersion,
       );
       expect(await result, FlutterCommandResult.success());
     }, overrides: <Type, Generator>{
@@ -121,13 +131,17 @@ void main() {
       Platform: () => fakePlatform,
     });
 
-    testUsingContext('Doesn\'t continue on known tag, dev branch, no force, already up-to-date', () async {
+    testUsingContext("Doesn't continue on known tag, dev branch, no force, already up-to-date", () async {
+      const String revision = 'abc123';
+      when(flutterVersion.frameworkRevision).thenReturn(revision);
       fakeCommandRunner.alreadyUpToDate = true;
+      fakeCommandRunner.remoteRevision = revision;
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        false,
-        false,
-        gitTagVersion,
-        flutterVersion,
+        force: false,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: gitTagVersion,
+        flutterVersion: flutterVersion,
       );
       expect(await result, FlutterCommandResult.success());
       verifyNever(globals.processManager.start(
@@ -146,16 +160,100 @@ void main() {
       Platform: () => fakePlatform,
     });
 
-    testUsingContext('verifyUpstreamConfigured', () async {
-      when(globals.processManager.run(
-        <String>['git', 'rev-parse', '@{u}'],
+    testUsingContext('fetchRemoteRevision returns revision if git succeeds', () async {
+      const String revision = 'abc123';
+      when(processManager.run(
+        <String>['git', 'fetch', '--tags'],
         environment:anyNamed('environment'),
         workingDirectory: anyNamed('workingDirectory')),
       ).thenAnswer((Invocation invocation) async {
         return FakeProcessResult()
           ..exitCode = 0;
       });
-      await realCommandRunner.verifyUpstreamConfigured();
+      when(processManager.run(
+        <String>['git', 'rev-parse', '--verify', '@{u}'],
+        environment:anyNamed('environment'),
+        workingDirectory: anyNamed('workingDirectory')),
+      ).thenAnswer((Invocation invocation) async {
+        return FakeProcessResult()
+          ..exitCode = 0
+          ..stdout = revision;
+      });
+      expect(await realCommandRunner.fetchRemoteRevision(), revision);
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => processManager,
+      Platform: () => fakePlatform,
+    });
+
+    testUsingContext('fetchRemoteRevision throws toolExit if HEAD is detached', () async {
+      when(processManager.run(
+        <String>['git', 'fetch', '--tags'],
+        environment:anyNamed('environment'),
+        workingDirectory: anyNamed('workingDirectory')),
+      ).thenAnswer((Invocation invocation) async {
+        return FakeProcessResult()..exitCode = 0;
+      });
+      when(processManager.run(
+        <String>['git', 'rev-parse', '--verify', '@{u}'],
+        environment:anyNamed('environment'),
+        workingDirectory: anyNamed('workingDirectory')),
+      ).thenThrow(const ProcessException(
+        'git',
+        <String>['rev-parse', '--verify', '@{u}'],
+        'fatal: HEAD does not point to a branch',
+      ));
+      expect(
+        () async => await realCommandRunner.fetchRemoteRevision(),
+        throwsToolExit(message: 'You are not currently on a release branch.'),
+      );
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => processManager,
+      Platform: () => fakePlatform,
+    });
+
+    testUsingContext('fetchRemoteRevision throws toolExit if no upstream configured', () async {
+      when(processManager.run(
+        <String>['git', 'fetch', '--tags'],
+        environment:anyNamed('environment'),
+        workingDirectory: anyNamed('workingDirectory')),
+      ).thenAnswer((Invocation invocation) async {
+        return FakeProcessResult()..exitCode = 0;
+      });
+      when(processManager.run(
+        <String>['git', 'rev-parse', '--verify', '@{u}'],
+        environment:anyNamed('environment'),
+        workingDirectory: anyNamed('workingDirectory')),
+      ).thenThrow(const ProcessException(
+        'git',
+        <String>['rev-parse', '--verify', '@{u}'],
+        'fatal: no upstream configured for branch',
+      ));
+      expect(
+        () async => await realCommandRunner.fetchRemoteRevision(),
+        throwsToolExit(
+          message: 'Unable to upgrade Flutter: no origin repository configured\.',
+        ),
+      );
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => processManager,
+      Platform: () => fakePlatform,
+    });
+
+    testUsingContext('git exception during attemptReset throwsToolExit', () async {
+      const String revision = 'abc123';
+      const String errorMessage = 'fatal: Could not parse object ´$revision´';
+      when(processManager.run(
+        <String>['git', 'reset', '--hard', revision]
+      )).thenThrow(const ProcessException(
+        'git',
+        <String>['reset', '--hard', revision],
+        errorMessage,
+      ));
+
+      expect(
+        () async => await realCommandRunner.attemptReset(revision),
+        throwsToolExit(message: errorMessage),
+      );
     }, overrides: <Type, Generator>{
       ProcessManager: () => processManager,
       Platform: () => fakePlatform,
@@ -225,7 +323,13 @@ void main() {
         fakeProcessManager = FakeProcessManager.list(<FakeCommand>[
           const FakeCommand(
             command: <String>[
-              'git', 'describe', '--match', 'v*.*.*', '--first-parent', '--long', '--tags',
+              'git', 'tag', '--contains', 'HEAD',
+            ],
+            stdout: '',
+          ),
+          const FakeCommand(
+            command: <String>[
+              'git', 'describe', '--match', '*.*.*-*.*.pre', '--first-parent', '--long', '--tags',
             ],
             stdout: 'v1.12.16-19-gb45b676af',
           ),
@@ -251,64 +355,17 @@ void main() {
           ],
         );
 
-        expect(json.decode(flutterToolState.readAsStringSync()),
-          containsPair('redisplay-welcome-message', true));
+        expect(
+          json.decode(flutterToolState.readAsStringSync()),
+          containsPair('redisplay-welcome-message', true),
+        );
       }, overrides: <Type, Generator>{
         FlutterVersion: () => mockFlutterVersion,
         ProcessManager: () => fakeProcessManager,
-        PersistentToolState: () => PersistentToolState(flutterToolState),
-      });
-    });
-  });
-
-  group('matchesGitLine', () {
-    setUpAll(() {
-      Cache.disableLocking();
-    });
-
-    bool _match(String line) => UpgradeCommandRunner.matchesGitLine(line);
-
-    test('regex match', () {
-      expect(_match(' .../flutter_gallery/lib/demo/buttons_demo.dart    | 10 +--'), true);
-      expect(_match(' dev/benchmarks/complex_layout/lib/main.dart        |  24 +-'), true);
-
-      expect(_match(' rename {packages/flutter/doc => dev/docs}/styles.html (92%)'), true);
-      expect(_match(' delete mode 100644 doc/index.html'), true);
-      expect(_match(' create mode 100644 examples/flutter_gallery/lib/gallery/demo.dart'), true);
-
-      expect(_match('Fast-forward'), true);
-    });
-
-    test('regex doesn\'t match', () {
-      expect(_match('Updating 79cfe1e..5046107'), false);
-      expect(_match('229 files changed, 6179 insertions(+), 3065 deletions(-)'), false);
-    });
-
-    group('findProjectRoot', () {
-      Directory tempDir;
-
-      setUp(() async {
-        tempDir = globals.fs.systemTempDirectory.createTempSync('flutter_tools_upgrade_test.');
-      });
-
-      tearDown(() {
-        tryToDelete(tempDir);
-      });
-
-      testUsingContext('in project', () async {
-        final String projectPath = await createProject(tempDir);
-        expect(findProjectRoot(projectPath), projectPath);
-        expect(findProjectRoot(globals.fs.path.join(projectPath, 'lib')), projectPath);
-
-        final String hello = globals.fs.path.join(Cache.flutterRoot, 'examples', 'hello_world');
-        expect(findProjectRoot(hello), hello);
-        expect(findProjectRoot(globals.fs.path.join(hello, 'lib')), hello);
-      });
-
-      testUsingContext('outside project', () async {
-        final String projectPath = await createProject(tempDir);
-        expect(findProjectRoot(globals.fs.directory(projectPath).parent.path), null);
-        expect(findProjectRoot(Cache.flutterRoot), null);
+        PersistentToolState: () => PersistentToolState.test(
+          directory: tempDir,
+          logger: testLogger,
+        ),
       });
     });
   });
@@ -319,20 +376,19 @@ class FakeUpgradeCommandRunner extends UpgradeCommandRunner {
 
   bool alreadyUpToDate = false;
 
+  String remoteRevision = '';
+
   @override
-  Future<void> verifyUpstreamConfigured() async {}
+  Future<String> fetchRemoteRevision() async => remoteRevision;
 
   @override
   Future<bool> hasUncomittedChanges() async => willHaveUncomittedChanges;
 
   @override
-  Future<void> resetChanges(GitTagVersion gitTagVersion) async {}
-
-  @override
   Future<void> upgradeChannel(FlutterVersion flutterVersion) async {}
 
   @override
-  Future<bool> attemptFastForward(FlutterVersion flutterVersion) async => alreadyUpToDate;
+  Future<void> attemptReset(String newRevision) async {}
 
   @override
   Future<void> precacheArtifacts() async {}

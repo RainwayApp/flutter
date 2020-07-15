@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -345,7 +347,6 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
         // around each button on each side, and the button itself will have 8
         // pixels internally on each side, yet we want the left edge of the
         // inside of the button to line up with the 24.0 left inset.
-        // TODO(ianh): Better magic. See https://github.com/flutter/flutter/issues/4460
         startPadding = 12.0;
       }
     } else {
@@ -439,8 +440,8 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
                   // These typographic styles aren't quite the regular ones. We pick the closest ones from the regular
                   // list and then tweak them appropriately.
                   // See https://material.io/design/components/data-tables.html#tables-within-cards
-                  style: _selectedRowCount > 0 ? themeData.textTheme.subhead.copyWith(color: themeData.accentColor)
-                                               : themeData.textTheme.title.copyWith(fontWeight: FontWeight.w400),
+                  style: _selectedRowCount > 0 ? themeData.textTheme.subtitle1.copyWith(color: themeData.accentColor)
+                                               : themeData.textTheme.headline6.copyWith(fontWeight: FontWeight.w400),
                   child: IconTheme.merge(
                     data: const IconThemeData(
                       opacity: 0.54
@@ -474,6 +475,7 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
                     headingRowHeight: widget.headingRowHeight,
                     horizontalMargin: widget.horizontalMargin,
                     columnSpacing: widget.columnSpacing,
+                    showCheckboxColumn: widget.showCheckboxColumn,
                     rows: _getRows(_firstRowIndex, widget.rowsPerPage),
                   ),
                 ),
@@ -485,7 +487,8 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
                     opacity: 0.54
                   ),
                   child: Container(
-                    // TODO(bkonyi): this won't handle text zoom correctly, https://github.com/flutter/flutter/issues/48522
+                    // TODO(bkonyi): this won't handle text zoom correctly,
+                    //  https://github.com/flutter/flutter/issues/48522
                     height: 56.0,
                     child: SingleChildScrollView(
                       dragStartBehavior: widget.dragStartBehavior,

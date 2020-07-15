@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -64,6 +66,61 @@ void main() {
     await tester.tap(find.byKey(key));
 
     expect(log, isEmpty);
+  });
+
+  testWidgets('Radio can be toggled when toggleable is set', (WidgetTester tester) async {
+    final Key key = UniqueKey();
+    final List<int> log = <int>[];
+
+    await tester.pumpWidget(Material(
+      child: Center(
+        child: Radio<int>(
+          key: key,
+          value: 1,
+          groupValue: 2,
+          onChanged: log.add,
+          toggleable: true,
+        ),
+      ),
+    ));
+
+    await tester.tap(find.byKey(key));
+
+    expect(log, equals(<int>[1]));
+    log.clear();
+
+    await tester.pumpWidget(Material(
+      child: Center(
+        child: Radio<int>(
+          key: key,
+          value: 1,
+          groupValue: 1,
+          onChanged: log.add,
+          toggleable: true,
+        ),
+      ),
+    ));
+
+    await tester.tap(find.byKey(key));
+
+    expect(log, equals(<int>[null]));
+    log.clear();
+
+    await tester.pumpWidget(Material(
+      child: Center(
+        child: Radio<int>(
+          key: key,
+          value: 1,
+          groupValue: null,
+          onChanged: log.add,
+          toggleable: true,
+        ),
+      ),
+    ));
+
+    await tester.tap(find.byKey(key));
+
+    expect(log, equals(<int>[1]));
   });
 
   testWidgets('Radio size is configurable by ThemeData.materialTapTargetSize', (WidgetTester tester) async {
@@ -282,7 +339,7 @@ void main() {
       find.byKey(painterKey),
       matchesGoldenFile('radio.ink_ripple.png'),
     );
-  }, skip: isBrowser);
+  });
 
   testWidgets('Radio is focusable and has correct focus color', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'Radio');
@@ -363,7 +420,7 @@ void main() {
     );
   });
 
-  testWidgets('Radio can be hovered and has correct focus color', (WidgetTester tester) async {
+  testWidgets('Radio can be hovered and has correct hover color', (WidgetTester tester) async {
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     int groupValue = 0;
     const Key radioKey = Key('radio');
@@ -424,7 +481,7 @@ void main() {
               color: const Color(0xffffffff),
               rect: const Rect.fromLTRB(350.0, 250.0, 450.0, 350.0))
           ..circle(color: Colors.orange[500])
-          ..circle(color: const Color(0x8a000000), style: PaintingStyle.stroke, strokeWidth: 2.0)
+          ..circle(color: const Color(0x8a000000), style: PaintingStyle.stroke, strokeWidth: 2.0),
     );
 
     // Check when the radio is selected, but disabled.
@@ -443,7 +500,7 @@ void main() {
     );
   });
 
-  testWidgets('Radio can be toggled by keyboard shortcuts', (WidgetTester tester) async {
+  testWidgets('Radio can be controlled by keyboard shortcuts', (WidgetTester tester) async {
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     int groupValue = 1;
     const Key radioKey0 = Key('radio0');
@@ -557,5 +614,86 @@ void main() {
     await buildTest(const VisualDensity(horizontal: 3.0, vertical: -3.0));
     await tester.pumpAndSettle();
     expect(box.size, equals(const Size(60, 36)));
+  });
+
+  testWidgets('Radio changes mouse cursor when hovered', (WidgetTester tester) async {
+    const Key key = ValueKey<int>(1);
+    // Test Radio() constructor
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.forbidden,
+                child: Radio<int>(
+                  key: key,
+                  mouseCursor: SystemMouseCursors.text,
+                  value: 1,
+                  onChanged: (int v) {},
+                  groupValue: 2,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse, pointer: 1);
+    await gesture.addPointer(location: tester.getCenter(find.byKey(key)));
+    addTearDown(gesture.removePointer);
+
+    await tester.pump();
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.text);
+
+
+    // Test default cursor
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.forbidden,
+                child: Radio<int>(
+                  value: 1,
+                  onChanged: (int v) {},
+                  groupValue: 2,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.click);
+
+    // Test default cursor when disabled
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.forbidden,
+                child: Radio<int>(
+                  value: 1,
+                  onChanged: null,
+                  groupValue: 2,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.basic);
   });
 }

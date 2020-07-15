@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter_tools/src/build_info.dart';
+import 'package:file/memory.dart';
+import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
+import 'package:flutter_tools/src/base/platform.dart';
+import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/test/flutter_platform.dart';
 import 'package:meta/meta.dart';
-
-import 'package:platform/platform.dart';
 import 'package:mockito/mockito.dart';
 import 'package:process/process.dart';
 import 'package:test_core/backend.dart'; // ignore: deprecated_member_use
@@ -16,17 +17,44 @@ import '../src/common.dart';
 import '../src/context.dart';
 
 void main() {
+  FileSystem fileSystem;
+
+  setUp(() {
+    fileSystem = MemoryFileSystem.test();
+    fileSystem.file('.packages').writeAsStringSync('\n');
+  });
+
   group('FlutterPlatform', () {
-    testUsingContext('ensureConfiguration throws an error if an explicitObservatoryPort is specified and more than one test file', () async {
-      final FlutterPlatform flutterPlatform = FlutterPlatform(buildMode: BuildMode.debug, shellPath: '/', explicitObservatoryPort: 1234);
+    testUsingContext('ensureConfiguration throws an error if an '
+      'explicitObservatoryPort is specified and more than one test file', () async {
+      final FlutterPlatform flutterPlatform = FlutterPlatform(
+        buildMode: BuildMode.debug,
+        shellPath: '/',
+        explicitObservatoryPort: 1234,
+        extraFrontEndOptions: <String>[],
+      );
       flutterPlatform.loadChannel('test1.dart', MockSuitePlatform());
+
       expect(() => flutterPlatform.loadChannel('test2.dart', MockSuitePlatform()), throwsToolExit());
+    }, overrides: <Type, Generator>{
+      FileSystem: () => fileSystem,
+      ProcessManager: () => FakeProcessManager.any(),
     });
 
-    testUsingContext('ensureConfiguration throws an error if a precompiled entrypoint is specified and more that one test file', () {
-      final FlutterPlatform flutterPlatform = FlutterPlatform(buildMode: BuildMode.debug, shellPath: '/', precompiledDillPath: 'example.dill');
+    testUsingContext('ensureConfiguration throws an error if a precompiled '
+      'entrypoint is specified and more that one test file', () {
+      final FlutterPlatform flutterPlatform = FlutterPlatform(
+        buildMode: BuildMode.debug,
+        shellPath: '/',
+        precompiledDillPath: 'example.dill',
+        extraFrontEndOptions: <String>[],
+      );
       flutterPlatform.loadChannel('test1.dart', MockSuitePlatform());
+
       expect(() => flutterPlatform.loadChannel('test2.dart', MockSuitePlatform()), throwsToolExit());
+    }, overrides: <Type, Generator>{
+      FileSystem: () => fileSystem,
+      ProcessManager: () => FakeProcessManager.any(),
     });
 
     group('The FLUTTER_TEST environment variable is passed to the test process', () {
@@ -36,18 +64,29 @@ void main() {
       final Map<Type, Generator> contextOverrides = <Type, Generator>{
         Platform: () => mockPlatform,
         ProcessManager: () => mockProcessManager,
+        FileSystem: () => fileSystem,
       };
 
       setUp(() {
         mockPlatform = MockPlatform();
+        when(mockPlatform.isWindows).thenReturn(false);
         mockProcessManager = MockProcessManager();
         flutterPlatform = TestFlutterPlatform();
       });
 
       Future<Map<String, String>> captureEnvironment() async {
         flutterPlatform.loadChannel('test1.dart', MockSuitePlatform());
+        when(mockProcessManager.start(
+          any,
+          environment: anyNamed('environment')),
+        ).thenAnswer((_) {
+          return Future<Process>.value(MockProcess());
+        });
         await untilCalled(mockProcessManager.start(any, environment: anyNamed('environment')));
-        final VerificationResult toVerify = verify(mockProcessManager.start(any, environment: captureAnyNamed('environment')));
+        final VerificationResult toVerify = verify(mockProcessManager.start(
+          any,
+          environment: captureAnyNamed('environment'),
+        ));
         expect(toVerify.captured, hasLength(1));
         expect(toVerify.captured.first, isA<Map<String, String>>());
         return toVerify.captured.first as Map<String, String>;
@@ -90,6 +129,7 @@ void main() {
         shellPath: 'abc',
         enableObservatory: false,
         startPaused: true,
+        extraFrontEndOptions: <String>[],
       ), throwsAssertionError);
 
       expect(() => installHook(
@@ -98,6 +138,7 @@ void main() {
         enableObservatory: false,
         startPaused: false,
         observatoryPort: 123,
+        extraFrontEndOptions: <String>[],
       ), throwsAssertionError);
 
       FlutterPlatform capturedPlatform;
@@ -118,6 +159,7 @@ void main() {
         observatoryPort: 200,
         serverType: InternetAddressType.IPv6,
         icudtlPath: 'ghi',
+        extraFrontEndOptions: <String>[],
         platformPluginRegistration: (FlutterPlatform platform) {
           capturedPlatform = platform;
         });
@@ -146,6 +188,8 @@ class MockSuitePlatform extends Mock implements SuitePlatform {}
 
 class MockProcessManager extends Mock implements ProcessManager {}
 
+class MockProcess extends Mock implements Process {}
+
 class MockPlatform extends Mock implements Platform {}
 
 class MockHttpServer extends Mock implements HttpServer {}
@@ -164,6 +208,7 @@ class TestFlutterPlatform extends FlutterPlatform {
     startPaused: false,
     enableObservatory: false,
     buildTestAssets: false,
+    extraFrontEndOptions: <String>[],
   );
 
   @override

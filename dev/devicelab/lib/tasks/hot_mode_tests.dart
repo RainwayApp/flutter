@@ -13,7 +13,7 @@ import '../framework/framework.dart';
 import '../framework/utils.dart';
 
 final Directory _editedFlutterGalleryDir = dir(path.join(Directory.systemTemp.path, 'edited_flutter_gallery'));
-final Directory flutterGalleryDir = dir(path.join(flutterDirectory.path, 'examples/flutter_gallery'));
+final Directory flutterGalleryDir = dir(path.join(flutterDirectory.path, 'dev/integration_tests/flutter_gallery'));
 
 TaskFunction createHotModeTest({String deviceIdOverride, Map<String, String> environment}) {
   return () async {
@@ -55,7 +55,7 @@ TaskFunction createHotModeTest({String deviceIdOverride, Map<String, String> env
               .transform<String>(utf8.decoder)
               .transform<String>(const LineSplitter())
               .listen((String line) {
-            if (line.contains('\] Reloaded ')) {
+            if (line.contains('] Reloaded ')) {
               if (hotReloadCount == 0) {
                 // Update the file and reload again.
                 final File appDartSource = file(path.join(
@@ -108,7 +108,7 @@ TaskFunction createHotModeTest({String deviceIdOverride, Map<String, String> env
               .transform<String>(utf8.decoder)
               .transform<String>(const LineSplitter())
               .listen((String line) {
-            if (line.contains('\] Reloaded ')) {
+            if (line.contains('] Reloaded ')) {
               process.stdin.writeln('q');
             }
             print('stdout: $line');

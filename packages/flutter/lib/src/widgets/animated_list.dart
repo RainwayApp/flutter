@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 
@@ -48,7 +50,7 @@ class _ActiveItem implements Comparable<_ActiveItem> {
 ///
 /// {@youtube 560 315 https://www.youtube.com/watch?v=ZtfItHwFlZ8}
 ///
-/// {@tool sample --template=freeform}
+/// {@tool dartpad --template=freeform}
 /// This sample application uses an [AnimatedList] to create an effect when
 /// items are removed or added to the list.
 ///
@@ -229,7 +231,7 @@ class _ActiveItem implements Comparable<_ActiveItem> {
 ///
 ///   @override
 ///   Widget build(BuildContext context) {
-///     TextStyle textStyle = Theme.of(context).textTheme.display1;
+///     TextStyle textStyle = Theme.of(context).textTheme.headline4;
 ///     if (selected)
 ///       textStyle = textStyle.copyWith(color: Colors.lightGreenAccent[400]);
 ///     return Padding(
@@ -241,7 +243,7 @@ class _ActiveItem implements Comparable<_ActiveItem> {
 ///           behavior: HitTestBehavior.opaque,
 ///           onTap: onTap,
 ///           child: SizedBox(
-///             height: 128.0,
+///             height: 80.0,
 ///             child: Card(
 ///               color: Colors.primaries[item % Colors.primaries.length],
 ///               child: Center(
@@ -490,7 +492,7 @@ class AnimatedListState extends State<AnimatedList> with TickerProviderStateMixi
 /// [GlobalKey] or use the static [SliverAnimatedList.of] method from an item's
 /// input callback.
 ///
-/// {@tool sample --template=freeform}
+/// {@tool dartpad --template=freeform}
 /// This sample application uses a [SliverAnimatedList] to create an animated
 /// effect when items are removed or added to the list.
 ///
@@ -588,21 +590,21 @@ class AnimatedListState extends State<AnimatedList> with TickerProviderStateMixi
 ///                 'SliverAnimatedList',
 ///                 style: TextStyle(fontSize: 30),
 ///               ),
-///               expandedHeight: 100,
+///               expandedHeight: 60,
 ///               centerTitle: true,
 ///               backgroundColor: Colors.amber[900],
 ///               leading: IconButton(
 ///                 icon: const Icon(Icons.add_circle),
 ///                 onPressed: _insert,
 ///                 tooltip: 'Insert a new item.',
-///                 iconSize: 48,
+///                 iconSize: 32,
 ///               ),
 ///               actions: [
 ///                 IconButton(
 ///                   icon: const Icon(Icons.remove_circle),
 ///                   onPressed: _remove,
 ///                   tooltip: 'Remove the selected item.',
-///                   iconSize: 48,
+///                   iconSize: 32,
 ///                 ),
 ///               ],
 ///             ),
@@ -704,7 +706,7 @@ class AnimatedListState extends State<AnimatedList> with TickerProviderStateMixi
 ///         child: GestureDetector(
 ///           onTap: onTap,
 ///           child: SizedBox(
-///             height: 120.0,
+///             height: 80.0,
 ///             child: Card(
 ///               color: selected
 ///                 ? Colors.black12
@@ -712,7 +714,7 @@ class AnimatedListState extends State<AnimatedList> with TickerProviderStateMixi
 ///               child: Center(
 ///                 child: Text(
 ///                   'Item $item',
-///                   style: Theme.of(context).textTheme.display1,
+///                   style: Theme.of(context).textTheme.headline4,
 ///                 ),
 ///               ),
 ///             ),

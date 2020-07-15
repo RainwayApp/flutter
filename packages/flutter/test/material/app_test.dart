@@ -2,11 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:mockito/mockito.dart';
 
 class StateMarker extends StatefulWidget {
   const StateMarker({ Key key, this.child }) : super(key: key);
@@ -505,7 +506,7 @@ void main() {
     );
 
     // Default US "select all" text.
-    expect(find.text('SELECT ALL'), findsOneWidget);
+    expect(find.text('Select all'), findsOneWidget);
     // Default Cupertino US "select all" text.
     expect(find.text('Select All'), findsOneWidget);
   });
@@ -788,6 +789,69 @@ void main() {
     expect(themeBeforeBrightnessChange.brightness, Brightness.light);
     expect(themeAfterBrightnessChange.brightness, Brightness.dark);
   });
+
+  testWidgets('MaterialApp can customize initial routes', (WidgetTester tester) async {
+    final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        onGenerateInitialRoutes: (String initialRoute) {
+          expect(initialRoute, '/abc');
+          return <Route<void>>[
+            PageRouteBuilder<void>(
+              pageBuilder: (
+                BuildContext context,
+                Animation<double> animation,
+                Animation<double> secondaryAnimation) {
+                return const Text('non-regular page one');
+              }
+            ),
+            PageRouteBuilder<void>(
+              pageBuilder: (
+                BuildContext context,
+                Animation<double> animation,
+                Animation<double> secondaryAnimation) {
+                return const Text('non-regular page two');
+              }
+            ),
+          ];
+        },
+        initialRoute: '/abc',
+        routes: <String, WidgetBuilder>{
+          '/': (BuildContext context) => const Text('regular page one'),
+          '/abc': (BuildContext context) => const Text('regular page two'),
+        },
+      )
+    );
+    expect(find.text('non-regular page two'), findsOneWidget);
+    expect(find.text('non-regular page one'), findsNothing);
+    expect(find.text('regular page one'), findsNothing);
+    expect(find.text('regular page two'), findsNothing);
+    navigatorKey.currentState.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('non-regular page two'), findsNothing);
+    expect(find.text('non-regular page one'), findsOneWidget);
+    expect(find.text('regular page one'), findsNothing);
+    expect(find.text('regular page two'), findsNothing);
+  });
 }
 
-class MockAccessibilityFeature extends Mock implements AccessibilityFeatures {}
+class MockAccessibilityFeature implements AccessibilityFeatures {
+  @override
+  bool get accessibleNavigation => true;
+
+  @override
+  bool get boldText => true;
+
+  @override
+  bool get disableAnimations => true;
+
+  @override
+  bool get highContrast => true;
+
+  @override
+  bool get invertColors => true;
+
+  @override
+  bool get reduceMotion => true;
+}

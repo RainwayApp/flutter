@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
@@ -168,7 +170,8 @@ class ChipTheme extends InheritedTheme {
 ///  * [Theme] widget, which performs a similar function to [ChipTheme],
 ///    but for overall themes.
 ///  * [ThemeData], which has a default [ChipThemeData].
-class ChipThemeData extends Diagnosticable {
+@immutable
+class ChipThemeData with Diagnosticable {
   /// Create a [ChipThemeData] given a set of exact values. All the values
   /// must be specified except for [shadowColor], [selectedShadowColor],
   /// [elevation], and [pressElevation], which may be null.
@@ -185,7 +188,7 @@ class ChipThemeData extends Diagnosticable {
     this.selectedShadowColor,
     this.showCheckmark,
     this.checkmarkColor,
-    @required this.labelPadding,
+    this.labelPadding,
     @required this.padding,
     @required this.shape,
     @required this.labelStyle,
@@ -197,7 +200,6 @@ class ChipThemeData extends Diagnosticable {
        assert(disabledColor != null),
        assert(selectedColor != null),
        assert(secondarySelectedColor != null),
-       assert(labelPadding != null),
        assert(padding != null),
        assert(shape != null),
        assert(labelStyle != null),
@@ -246,7 +248,6 @@ class ChipThemeData extends Diagnosticable {
     const int selectAlpha = 0x3d; // 12% + 12% = 24%
     const int textLabelAlpha = 0xde; // 87%
     const ShapeBorder shape = StadiumBorder();
-    const EdgeInsetsGeometry labelPadding = EdgeInsets.symmetric(horizontal: 8.0);
     const EdgeInsetsGeometry padding = EdgeInsets.all(4.0);
 
     primaryColor = primaryColor ?? (brightness == Brightness.light ? Colors.black : Colors.white);
@@ -266,7 +267,6 @@ class ChipThemeData extends Diagnosticable {
       disabledColor: disabledColor,
       selectedColor: selectedColor,
       secondarySelectedColor: secondarySelectedColor,
-      labelPadding: labelPadding,
       padding: padding,
       shape: shape,
       labelStyle: labelStyle,
@@ -510,7 +510,7 @@ class ChipThemeData extends Diagnosticable {
     final ChipThemeData defaultData = ChipThemeData.fromDefaults(
       secondaryColor: defaultTheme.primaryColor,
       brightness: defaultTheme.brightness,
-      labelStyle: defaultTheme.textTheme.body2,
+      labelStyle: defaultTheme.textTheme.bodyText1,
     );
     properties.add(ColorProperty('backgroundColor', backgroundColor, defaultValue: defaultData.backgroundColor));
     properties.add(ColorProperty('deleteIconColor', deleteIconColor, defaultValue: defaultData.deleteIconColor));

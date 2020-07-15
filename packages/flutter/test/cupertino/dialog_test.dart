@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math';
 
 import 'package:flutter/cupertino.dart';
@@ -50,6 +52,62 @@ void main() {
 
     expect(didDelete, isTrue);
     expect(find.text('Delete'), findsNothing);
+  });
+
+  testWidgets('Dialog not barrier dismissible by default', (WidgetTester tester) async {
+    await tester.pumpWidget(createAppWithCenteredButton(const Text('Go')));
+
+    final BuildContext context = tester.element(find.text('Go'));
+
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          width: 100.0,
+          height: 100.0,
+          alignment: Alignment.center,
+          child: const Text('Dialog'),
+        );
+      },
+    );
+
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    expect(find.text('Dialog'), findsOneWidget);
+
+    // Tap on the barrier, which shouldn't do anything this time.
+    await tester.tapAt(const Offset(10.0, 10.0));
+
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    expect(find.text('Dialog'), findsOneWidget);
+
+  });
+
+ testWidgets('Dialog configurable to be barrier dismissible', (WidgetTester tester) async {
+    await tester.pumpWidget(createAppWithCenteredButton(const Text('Go')));
+
+    final BuildContext context = tester.element(find.text('Go'));
+
+    showCupertinoDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Container(
+          width: 100.0,
+          height: 100.0,
+          alignment: Alignment.center,
+          child: const Text('Dialog'),
+        );
+      },
+    );
+
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    expect(find.text('Dialog'), findsOneWidget);
+
+    // Tap off the barrier.
+    await tester.tapAt(const Offset(10.0, 10.0));
+
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    expect(find.text('Dialog'), findsNothing);
   });
 
   testWidgets('Dialog destructive action style', (WidgetTester tester) async {
@@ -111,54 +169,58 @@ void main() {
     expect(
       semantics,
       hasSemantics(
-      TestSemantics.root(
-        children: <TestSemantics>[
-          TestSemantics(
-            children: <TestSemantics>[
-              TestSemantics(
-                flags: <SemanticsFlag>[SemanticsFlag.scopesRoute],
-                children: <TestSemantics>[
-                  TestSemantics(
-                    flags: <SemanticsFlag>[SemanticsFlag.scopesRoute, SemanticsFlag.namesRoute],
-                    label: 'Alert',
-                    children: <TestSemantics>[
-                      TestSemantics(
-                        flags: <SemanticsFlag>[
-                          SemanticsFlag.hasImplicitScrolling,
-                        ],
-                        children: <TestSemantics>[
-                          TestSemantics(label: 'The Title'),
-                          TestSemantics(label: 'Content'),
-                        ],
-                      ),
-                      TestSemantics(
-                        flags: <SemanticsFlag>[
-                          SemanticsFlag.hasImplicitScrolling,
-                        ],
-                        children: <TestSemantics>[
-                          TestSemantics(
-                            flags: <SemanticsFlag>[SemanticsFlag.isButton],
-                            label: 'Cancel',
-                          ),
-                          TestSemantics(
-                            flags: <SemanticsFlag>[SemanticsFlag.isButton],
-                            label: 'OK',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
+        TestSemantics.root(
+          children: <TestSemantics>[
+            TestSemantics(
+              children: <TestSemantics>[
+                TestSemantics(
+                  children: <TestSemantics>[
+                    TestSemantics(
+                      flags: <SemanticsFlag>[SemanticsFlag.scopesRoute],
+                      children: <TestSemantics>[
+                        TestSemantics(
+                          flags: <SemanticsFlag>[SemanticsFlag.scopesRoute, SemanticsFlag.namesRoute],
+                          label: 'Alert',
+                          children: <TestSemantics>[
+                            TestSemantics(
+                              flags: <SemanticsFlag>[
+                                SemanticsFlag.hasImplicitScrolling,
+                              ],
+                              children: <TestSemantics>[
+                                TestSemantics(label: 'The Title'),
+                                TestSemantics(label: 'Content'),
+                              ],
+                            ),
+                            TestSemantics(
+                              flags: <SemanticsFlag>[
+                                SemanticsFlag.hasImplicitScrolling,
+                              ],
+                              children: <TestSemantics>[
+                                TestSemantics(
+                                  flags: <SemanticsFlag>[SemanticsFlag.isButton],
+                                  label: 'Cancel',
+                                ),
+                                TestSemantics(
+                                  flags: <SemanticsFlag>[SemanticsFlag.isButton],
+                                  label: 'OK',
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ]
+                )
+              ],
+            ),
+          ],
+        ),
+        ignoreId: true,
+        ignoreRect: true,
+        ignoreTransform: true,
       ),
-      ignoreId: true,
-      ignoreRect: true,
-      ignoreTransform: true,
-    ),
-  );
+    );
 
     semantics.dispose();
   });
@@ -852,9 +914,9 @@ void main() {
     );
 
     // We must explicitly cause an "up" gesture to avoid a crash.
-    // todo(mattcarroll) remove this call when #19540 is fixed
+    // todo(mattcarroll) remove this call, https://github.com/flutter/flutter/issues/19540
     await gesture.up();
-  });
+  }, skip: isBrowser); // https://github.com/flutter/flutter/issues/52960
 
   testWidgets('ScaleTransition animation for showCupertinoDialog()', (WidgetTester tester) async {
     await tester.pumpWidget(
@@ -1127,5 +1189,18 @@ Widget boilerplate(Widget child) {
   return Directionality(
     textDirection: TextDirection.ltr,
     child: child,
+  );
+}
+
+Widget createAppWithCenteredButton(Widget child) {
+  return MaterialApp(
+    home: Material(
+      child: Center(
+        child: RaisedButton(
+          onPressed: null,
+          child: child
+        ),
+      )
+    )
   );
 }

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:ui' show Offset;
@@ -181,15 +183,20 @@ abstract class GestureRecognizer extends GestureArenaMember with DiagnosticableT
       }());
       result = callback();
     } catch (exception, stack) {
+      InformationCollector collector;
+      assert(() {
+        collector = () sync* {
+          yield StringProperty('Handler', name);
+          yield DiagnosticsProperty<GestureRecognizer>('Recognizer', this, style: DiagnosticsTreeStyle.errorProperty);
+        };
+        return true;
+      }());
       FlutterError.reportError(FlutterErrorDetails(
         exception: exception,
         stack: stack,
         library: 'gesture',
         context: ErrorDescription('while handling a gesture'),
-        informationCollector: () sync* {
-          yield StringProperty('Handler', name);
-          yield DiagnosticsProperty<GestureRecognizer>('Recognizer', this, style: DiagnosticsTreeStyle.errorProperty);
-        },
+        informationCollector: collector
       ));
     }
     return result;

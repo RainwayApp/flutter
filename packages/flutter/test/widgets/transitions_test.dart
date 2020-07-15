@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -59,7 +61,7 @@ void main() {
       DecoratedBoxTransition(
         decoration: decorationTween.animate(controller),
         child: const Text(
-          'Doesn\'t matter',
+          "Doesn't matter",
           textDirection: TextDirection.ltr,
         ),
       );
@@ -113,7 +115,7 @@ void main() {
         decoration: curvedDecorationAnimation,
         position: DecorationPosition.foreground,
         child: const Text(
-          'Doesn\'t matter',
+          "Doesn't matter",
           textDirection: TextDirection.ltr,
         ),
       );

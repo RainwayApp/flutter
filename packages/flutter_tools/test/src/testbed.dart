@@ -622,7 +622,7 @@ class FakeHttpHeaders extends HttpHeaders {
   List<String> operator [](String name) => <String>[];
 
   @override
-  void add(String name, Object value) { }
+  void add(String name, Object value, {bool preserveHeaderCase = false}) { }
 
   @override
   void clear() { }
@@ -640,13 +640,16 @@ class FakeHttpHeaders extends HttpHeaders {
   void removeAll(String name) { }
 
   @override
-  void set(String name, Object value) { }
+  void set(String name, Object value, {bool preserveHeaderCase = false}) { }
 
   @override
   String value(String name) => null;
 }
 
 class FakeFlutterVersion implements FlutterVersion {
+  @override
+  void fetchTagsAndUpdate() {  }
+
   @override
   String get channel => 'master';
 
@@ -721,8 +724,7 @@ class TestFeatureFlags implements FeatureFlags {
     this.isMacOSEnabled = false,
     this.isWebEnabled = false,
     this.isWindowsEnabled = false,
-    this.isAndroidEmbeddingV2Enabled = false,
-    this.isWebIncrementalCompilerEnabled = false,
+    this.isSingleWidgetReloadEnabled = false,
 });
 
   @override
@@ -738,10 +740,7 @@ class TestFeatureFlags implements FeatureFlags {
   final bool isWindowsEnabled;
 
   @override
-  final bool isAndroidEmbeddingV2Enabled;
-
-  @override
-  final bool isWebIncrementalCompilerEnabled;
+  final bool isSingleWidgetReloadEnabled;
 
   @override
   bool isEnabled(Feature feature) {
@@ -754,10 +753,6 @@ class TestFeatureFlags implements FeatureFlags {
         return isMacOSEnabled;
       case flutterWindowsDesktopFeature:
         return isWindowsEnabled;
-      case flutterAndroidEmbeddingV2Feature:
-        return isAndroidEmbeddingV2Enabled;
-      case flutterWebIncrementalCompiler:
-        return isWebIncrementalCompilerEnabled;
     }
     return false;
   }
@@ -822,12 +817,18 @@ class DelegateLogger implements Logger {
 
   @override
   bool get supportsColor => delegate.supportsColor;
+
+  @override
+  void clear() => delegate.clear();
 }
 
 /// An implementation of the Cache which does not download or require locking.
 class FakeCache implements Cache {
   @override
   bool includeAllPlatforms;
+
+  @override
+  Set<String> platformOverrideArtifacts;
 
   @override
   bool useUnsignedMacBinaries;
@@ -844,7 +845,7 @@ class FakeCache implements Cache {
   String get storageBaseUrl => null;
 
   @override
-  MapEntry<String, String> get dyLdLibEntry => null;
+  MapEntry<String, String> get dyLdLibEntry => const MapEntry<String, String>('DYLD_LIBRARY_PATH', '');
 
   @override
   String get engineRevision => null;
@@ -922,4 +923,16 @@ class FakeCache implements Cache {
   @override
   Future<void> updateAll(Set<DevelopmentArtifact> requiredArtifacts) async {
   }
+
+  @override
+  Future<void> downloadFile(Uri url, File location) async {
+  }
+
+  @override
+  Future<bool> doesRemoteExist(String message, Uri url) async {
+    return true;
+  }
+
+  @override
+  void clearStampFiles() {}
 }

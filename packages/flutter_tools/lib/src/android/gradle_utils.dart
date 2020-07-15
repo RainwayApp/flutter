@@ -4,11 +4,9 @@
 
 import 'package:meta/meta.dart';
 
-import '../android/android_sdk.dart';
 import '../base/common.dart';
 import '../base/context.dart';
 import '../base/file_system.dart';
-import '../base/os.dart';
 import '../base/terminal.dart';
 import '../base/utils.dart';
 import '../base/version.dart';
@@ -17,12 +15,11 @@ import '../cache.dart';
 import '../globals.dart' as globals;
 import '../project.dart';
 import '../reporting/reporting.dart';
-import 'android_sdk.dart';
 import 'android_studio.dart';
 
 /// The environment variables needed to run Gradle.
 Map<String, String> get gradleEnvironment {
-  final Map<String, String> environment = Map<String, String>.from(globals.platform.environment);
+  final Map<String, String> environment = Map<String, String>.of(globals.platform.environment);
   if (javaPath != null) {
     // Use java bundled with Android Studio.
     environment['JAVA_HOME'] = javaPath;
@@ -98,7 +95,7 @@ class GradleUtils {
 
   /// Injects the Gradle wrapper files if any of these files don't exist in [directory].
   void injectGradleWrapperIfNeeded(Directory directory) {
-    fsUtils.copyDirectorySync(
+    globals.fsUtils.copyDirectorySync(
       globals.cache.getArtifactDirectory('gradle_wrapper'),
       directory,
       shouldCopyFile: (File sourceFile, File destinationFile) {
@@ -129,7 +126,7 @@ distributionUrl=https\\://services.gradle.org/distributions/gradle-$gradleVersio
 }
 const String _defaultGradleVersion = '5.6.2';
 
-final RegExp _androidPluginRegExp = RegExp('com\.android\.tools\.build\:gradle\:(\\d+\.\\d+\.\\d+\)');
+final RegExp _androidPluginRegExp = RegExp(r'com\.android\.tools\.build:gradle:\(\d+\.\d+\.\d+\)');
 
 /// Returns the Gradle version that the current Android plugin depends on when found,
 /// otherwise it returns a default version.
@@ -172,7 +169,7 @@ bool _hasAnyExecutableFlagSet(File executable) {
 void _giveExecutePermissionIfNeeded(File executable) {
   if (!_hasAllExecutableFlagSet(executable)) {
     globals.printTrace('Trying to give execute permission to ${executable.path}.');
-    os.makeExecutable(executable);
+    globals.os.makeExecutable(executable);
   }
 }
 
@@ -240,7 +237,7 @@ void updateLocalProperties({
   BuildInfo buildInfo,
   bool requireAndroidSdk = true,
 }) {
-  if (requireAndroidSdk && androidSdk == null) {
+  if (requireAndroidSdk && globals.androidSdk == null) {
     exitWithNoSdkMessage();
   }
   final File localProperties = project.android.localPropertiesFile;
@@ -266,21 +263,23 @@ void updateLocalProperties({
     changed = true;
   }
 
-  if (androidSdk != null) {
-    changeIfNecessary('sdk.dir', fsUtils.escapePath(androidSdk.directory));
+  if (globals.androidSdk != null) {
+    changeIfNecessary('sdk.dir', globals.fsUtils.escapePath(globals.androidSdk.directory));
   }
 
-  changeIfNecessary('flutter.sdk', fsUtils.escapePath(Cache.flutterRoot));
+  changeIfNecessary('flutter.sdk', globals.fsUtils.escapePath(Cache.flutterRoot));
   if (buildInfo != null) {
     changeIfNecessary('flutter.buildMode', buildInfo.modeName);
     final String buildName = validatedBuildNameForPlatform(
       TargetPlatform.android_arm,
       buildInfo.buildName ?? project.manifest.buildName,
+      globals.logger,
     );
     changeIfNecessary('flutter.versionName', buildName);
     final String buildNumber = validatedBuildNumberForPlatform(
       TargetPlatform.android_arm,
       buildInfo.buildNumber ?? project.manifest.buildNumber,
+      globals.logger,
     );
     changeIfNecessary('flutter.versionCode', buildNumber?.toString());
   }
@@ -295,16 +294,16 @@ void updateLocalProperties({
 /// Writes the path to the Android SDK, if known.
 void writeLocalProperties(File properties) {
   final SettingsFile settings = SettingsFile();
-  if (androidSdk != null) {
-    settings.values['sdk.dir'] = fsUtils.escapePath(androidSdk.directory);
+  if (globals.androidSdk != null) {
+    settings.values['sdk.dir'] = globals.fsUtils.escapePath(globals.androidSdk.directory);
   }
   settings.writeContents(properties);
 }
 
 void exitWithNoSdkMessage() {
-  BuildEvent('unsupported-project', eventError: 'android-sdk-not-found').send();
+  BuildEvent('unsupported-project', eventError: 'android-sdk-not-found', flutterUsage: globals.flutterUsage).send();
   throwToolExit(
     '$warningMark No Android SDK found. '
-    'Try setting the ANDROID_HOME environment variable.'
+    'Try setting the ANDROID_SDK_ROOT environment variable.'
   );
 }

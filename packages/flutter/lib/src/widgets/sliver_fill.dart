@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
@@ -122,6 +124,8 @@ class _RenderSliverFractionalPadding extends RenderSliverEdgeInsetsPadding {
       assert(viewportFraction >= 0),
       _viewportFraction = viewportFraction;
 
+  SliverConstraints _lastResolvedConstraints;
+
   double get viewportFraction => _viewportFraction;
   double _viewportFraction;
   set viewportFraction(double newValue) {
@@ -142,10 +146,12 @@ class _RenderSliverFractionalPadding extends RenderSliverEdgeInsetsPadding {
   }
 
   void _resolve() {
-    if (_resolvedPadding != null)
+    if (_resolvedPadding != null && _lastResolvedConstraints == constraints)
       return;
+
     assert(constraints.axis != null);
     final double paddingValue = constraints.viewportMainAxisExtent * viewportFraction;
+    _lastResolvedConstraints = constraints;
     switch (constraints.axis) {
       case Axis.horizontal:
         _resolvedPadding = EdgeInsets.symmetric(horizontal: paddingValue);
@@ -182,7 +188,10 @@ class _RenderSliverFractionalPadding extends RenderSliverEdgeInsetsPadding {
 /// The [hasScrollBody] flag indicates whether the sliver's child has a
 /// scrollable body. This value is never null, and defaults to true. A common
 /// example of this use is a [NestedScrollView]. In this case, the sliver will
-/// size its child to fill the maximum available extent.
+/// size its child to fill the maximum available extent. [SliverFillRemaining]
+/// will not constrain the scrollable area, as it could potentially have an
+/// infinite depth. This is also true for use cases such as a [ScrollView] when
+/// [ScrollView.shrinkwrap] is true.
 ///
 /// ### When [SliverFillRemaining] does not have a scrollable child
 ///
@@ -192,13 +201,11 @@ class _RenderSliverFractionalPadding extends RenderSliverEdgeInsetsPadding {
 /// account in deciding how to layout this sliver.
 ///
 /// [SliverFillRemaining] will size its [child] to fill the viewport in the
-/// main axis if that space is larger than the child's extent, and the
-/// the amount of space that has been scrolled beforehand has not exceeded the
-/// main axis extent of the viewport.
+/// main axis if that space is larger than the child's extent, and the amount
+/// of space that has been scrolled beforehand has not exceeded the main axis
+/// extent of the viewport.
 ///
-/// {@animation 250 500 https://flutter.github.io/assets-for-api-docs/assets/widgets/sliver_fill_remaining_sizes_child.mp4}
-///
-/// {@tool sample --template=stateless_widget_scaffold}
+/// {@tool dartpad --template=stateless_widget_scaffold}
 ///
 /// In this sample the [SliverFillRemaining] sizes its [child] to fill the
 /// remaining extent of the viewport in both axes. The icon is centered in the
@@ -234,9 +241,7 @@ class _RenderSliverFractionalPadding extends RenderSliverEdgeInsetsPadding {
 /// [SliverFillRemaining] will defer to the size of its [child] if the
 /// child's size exceeds the remaining space in the viewport.
 ///
-/// {@animation 250 500 https://flutter.github.io/assets-for-api-docs/assets/widgets/sliver_fill_remaining_defers_to_child.mp4}
-///
-/// {@tool sample --template=stateless_widget_scaffold}
+/// {@tool dartpad --template=stateless_widget_scaffold}
 ///
 /// In this sample the [SliverFillRemaining] defers to the size of its [child]
 /// because the child's extent exceeds that of the remaining extent of the
@@ -278,9 +283,7 @@ class _RenderSliverFractionalPadding extends RenderSliverEdgeInsetsPadding {
 /// [SliverFillRemaining] will defer to the size of its [child] if the
 /// [precedingScrollExtent] exceeded the length of the viewport's main axis.
 ///
-/// {@animation 250 500 https://flutter.github.io/assets-for-api-docs/assets/widgets/sliver_fill_remaining_scrolled_beyond.mp4}
-///
-/// {@tool sample --template=stateless_widget_scaffold}
+/// {@tool dartpad --template=stateless_widget_scaffold}
 ///
 /// In this sample the [SliverFillRemaining] defers to the size of its [child]
 /// because the [precedingScrollExtent] of the [SliverConstraints] has gone
@@ -336,6 +339,9 @@ class _RenderSliverFractionalPadding extends RenderSliverEdgeInsetsPadding {
 /// button that is pinned to the bottom of the sliver, regardless of size or
 /// overscroll behavior. Try switching [fillOverscroll] to see the difference.
 ///
+/// This sample only shows the overscroll behavior on devices that support
+/// overscroll.
+///
 /// ```dart
 /// Widget build(BuildContext context) {
 ///   return CustomScrollView(
@@ -344,7 +350,10 @@ class _RenderSliverFractionalPadding extends RenderSliverEdgeInsetsPadding {
 ///     // fillOverscroll only changes the behavior of your layout when applied
 ///     // to Scrollables that allow for overscroll. BouncingScrollPhysics are
 ///     // one example, which are provided by default on the iOS platform.
-///     physics: BouncingScrollPhysics(),
+///     // BouncingScrollPhysics is combined with AlwaysScrollableScrollPhysics
+///     // to allow for the overscroll, regardless of the depth of the
+///     // scrollable.
+///     physics: BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
 ///     slivers: <Widget>[
 ///       SliverToBoxAdapter(
 ///         child: Container(

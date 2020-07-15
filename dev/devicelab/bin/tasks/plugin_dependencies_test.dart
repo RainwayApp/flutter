@@ -40,6 +40,7 @@ Future<void> main() async {
             '--org',
             'io.flutter.devicelab.plugin_a',
             '--template=plugin',
+            '--platforms=android,ios',
             pluginADirectory.path,
           ],
         );
@@ -55,6 +56,7 @@ Future<void> main() async {
             '--org',
             'io.flutter.devicelab.plugin_b',
             '--template=plugin',
+            '--platforms=android,ios',
             pluginBDirectory.path,
           ],
         );
@@ -70,6 +72,7 @@ Future<void> main() async {
             '--org',
             'io.flutter.devicelab.plugin_c',
             '--template=plugin',
+            '--platforms=ios',
             pluginCDirectory.path,
           ],
         );
@@ -170,7 +173,7 @@ public class DummyPluginAClass {
           File(path.join(exampleApp.path, '.flutter-plugins-dependencies'));
 
       if (!flutterPluginsDependenciesFile.existsSync()) {
-        return TaskResult.failure('${flutterPluginsDependenciesFile.path} doesn\'t exist');
+        return TaskResult.failure("${flutterPluginsDependenciesFile.path} doesn't exist");
       }
 
       final String flutterPluginsDependenciesFileContent = flutterPluginsDependenciesFile.readAsStringSync();
@@ -183,16 +186,16 @@ public class DummyPluginAClass {
       const String kExpectedPluginsDependenciesContent =
         '['
           '{'
-            '\"name\":\"plugin_a\",'
-            '\"dependencies\":[\"plugin_b\",\"plugin_c\"]'
+            '"name":"plugin_a",'
+            '"dependencies":["plugin_b","plugin_c"]'
           '},'
           '{'
-            '\"name\":\"plugin_b\",'
-            '\"dependencies\":[]'
+            '"name":"plugin_b",'
+            '"dependencies":[]'
           '},'
           '{'
-            '\"name\":\"plugin_c\",'
-            '\"dependencies\":[]'
+            '"name":"plugin_c",'
+            '"dependencies":[]'
           '}'
         ']';
       final String graphString = json.encode(dependencyGraph);

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 
 import 'tolerance.dart';
@@ -54,5 +56,5 @@ abstract class Simulation {
   Tolerance tolerance;
 
   @override
-  String toString() => '${objectRuntimeType(this, 'Simulation')}';
+  String toString() => objectRuntimeType(this, 'Simulation');
 }

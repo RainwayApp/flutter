@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -229,14 +231,12 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
       assert(() {
         final double delta = newPixels - pixels;
         if (overscroll.abs() > delta.abs()) {
-          throw FlutterError.fromParts(<DiagnosticsNode>[
-            ErrorSummary('$runtimeType.applyBoundaryConditions returned invalid overscroll value.'),
-            ErrorDescription(
-              'setPixels() was called to change the scroll offset from $pixels to $newPixels.\n'
-              'That is a delta of $delta units.\n'
-              '$runtimeType.applyBoundaryConditions reported an overscroll of $overscroll units.'
-            )
-          ]);
+          throw FlutterError(
+            '$runtimeType.applyBoundaryConditions returned invalid overscroll value.\n'
+            'setPixels() was called to change the scroll offset from $pixels to $newPixels.\n'
+            'That is a delta of $delta units.\n'
+            '$runtimeType.applyBoundaryConditions reported an overscroll of $overscroll units.'
+          );
         }
         return true;
       }());
@@ -311,7 +311,7 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
   void correctBy(double correction) {
     assert(
       _pixels != null,
-      'An initial pixels value must exist by caling correctPixels on the ScrollPosition',
+      'An initial pixels value must exist by calling correctPixels on the ScrollPosition',
     );
     _pixels += correction;
     _didChangeViewportDimensionOrReceiveCorrection = true;
@@ -402,18 +402,16 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
     assert(() {
       final double delta = value - pixels;
       if (result.abs() > delta.abs()) {
-        throw FlutterError.fromParts(<DiagnosticsNode>[
-          ErrorSummary('${physics.runtimeType}.applyBoundaryConditions returned invalid overscroll value.'),
-          ErrorDescription(
-            'The method was called to consider a change from $pixels to $value, which is a '
-            'delta of ${delta.toStringAsFixed(1)} units. However, it returned an overscroll of '
-            '${result.toStringAsFixed(1)} units, which has a greater magnitude than the delta. '
-            'The applyBoundaryConditions method is only supposed to reduce the possible range '
-            'of movement, not increase it.\n'
-            'The scroll extents are $minScrollExtent .. $maxScrollExtent, and the '
-            'viewport dimension is $viewportDimension.'
-          )
-        ]);
+        throw FlutterError(
+          '${physics.runtimeType}.applyBoundaryConditions returned invalid overscroll value.\n'
+          'The method was called to consider a change from $pixels to $value, which is a '
+          'delta of ${delta.toStringAsFixed(1)} units. However, it returned an overscroll of '
+          '${result.toStringAsFixed(1)} units, which has a greater magnitude than the delta. '
+          'The applyBoundaryConditions method is only supposed to reduce the possible range '
+          'of movement, not increase it.\n'
+          'The scroll extents are $minScrollExtent .. $maxScrollExtent, and the '
+          'viewport dimension is $viewportDimension.'
+        );
       }
       return true;
     }());
@@ -451,14 +449,22 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
   void _updateSemanticActions() {
     SemanticsAction forward;
     SemanticsAction backward;
-    switch (axis) {
-      case Axis.vertical:
+    switch (axisDirection) {
+      case AxisDirection.up:
+        forward = SemanticsAction.scrollDown;
+        backward = SemanticsAction.scrollUp;
+        break;
+      case AxisDirection.right:
+        forward = SemanticsAction.scrollLeft;
+        backward = SemanticsAction.scrollRight;
+        break;
+      case AxisDirection.down:
         forward = SemanticsAction.scrollUp;
         backward = SemanticsAction.scrollDown;
         break;
-      case Axis.horizontal:
-        forward = SemanticsAction.scrollLeft;
-        backward = SemanticsAction.scrollRight;
+      case AxisDirection.left:
+        forward = SemanticsAction.scrollRight;
+        backward = SemanticsAction.scrollLeft;
         break;
     }
 
@@ -485,11 +491,44 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
       assert(minScrollExtent != null);
       assert(maxScrollExtent != null);
       assert(minScrollExtent <= maxScrollExtent);
+      final ScrollMetrics oldPosition = haveDimensions ? copyWith() : null;
       _minScrollExtent = minScrollExtent;
       _maxScrollExtent = maxScrollExtent;
+      final ScrollMetrics newPosition = haveDimensions ? copyWith() : null;
+      _didChangeViewportDimensionOrReceiveCorrection = false;
+      if (haveDimensions && !correctForNewDimensions(oldPosition, newPosition))
+        return false;
       _haveDimensions = true;
       applyNewDimensions();
-      _didChangeViewportDimensionOrReceiveCorrection = false;
+    }
+    assert(!_didChangeViewportDimensionOrReceiveCorrection, 'Use correctForNewDimensions() (and return true) to change the scroll offset during applyContentDimensions().');
+    return true;
+  }
+
+  /// Verifies that the new content and viewport dimensions are acceptable.
+  ///
+  /// Called by [applyContentDimensions] to determine its return value.
+  ///
+  /// Should return true if the current scroll offset is correct given
+  /// the new content and viewport dimensions.
+  ///
+  /// Otherwise, should call [correctPixels] to correct the scroll
+  /// offset given the new dimensions, and then return false.
+  ///
+  /// This is only called when [haveDimensions] is true.
+  ///
+  /// The default implementation defers to [ScrollPhysics.adjustPositionForNewDimensions].
+  @protected
+  bool correctForNewDimensions(ScrollMetrics oldPosition, ScrollMetrics newPosition) {
+    final double newPixels = physics.adjustPositionForNewDimensions(
+      oldPosition: oldPosition,
+      newPosition: newPosition,
+      isScrolling: activity.isScrolling,
+      velocity: activity.velocity,
+    );
+    if (newPixels != pixels) {
+      correctPixels(newPixels);
+      return false;
     }
     return true;
   }
@@ -739,6 +778,23 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
   /// Subclasses should call this function when they change [userScrollDirection].
   void didUpdateScrollDirection(ScrollDirection direction) {
     UserScrollNotification(metrics: copyWith(), context: context.notificationContext, direction: direction).dispatch(context.notificationContext);
+  }
+
+  /// Provides a heuristic to determine if expensive frame-bound tasks should be
+  /// deferred.
+  ///
+  /// The actual work of this is delegated to the [physics] via
+  /// [ScrollPhysics.recommendDeferredScrolling] called with the current
+  /// [activity]'s [ScrollActivity.velocity].
+  ///
+  /// Returning true from this method indicates that the [ScrollPhysics]
+  /// evaluate the current scroll velocity to be great enough that expensive
+  /// operations impacting the UI should be deferred.
+  bool recommendDeferredLoading(BuildContext context) {
+    assert(context != null);
+    assert(activity != null);
+    assert(activity.velocity != null);
+    return physics.recommendDeferredLoading(activity.velocity, copyWith(), context);
   }
 
   @override

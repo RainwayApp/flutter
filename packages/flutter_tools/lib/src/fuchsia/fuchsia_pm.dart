@@ -5,6 +5,7 @@
 import '../base/common.dart';
 import '../base/file_system.dart';
 import '../base/io.dart';
+import '../base/net.dart';
 import '../base/process.dart';
 import '../convert.dart';
 import '../globals.dart' as globals;
@@ -106,11 +107,14 @@ class FuchsiaPM {
   /// [FuchsiaDevFinder.resolve], and [port] should be an unused port for the
   /// http server to bind.
   Future<Process> serve(String repoPath, String host, int port) async {
-    if (fuchsiaArtifacts.pm == null) {
+    if (globals.fuchsiaArtifacts.pm == null) {
       throwToolExit('Fuchsia pm tool not found');
     }
+    if (isIPv6Address(host.split('%').first)) {
+      host = '[$host]';
+    }
     final List<String> command = <String>[
-      fuchsiaArtifacts.pm.path,
+      globals.fuchsiaArtifacts.pm.path,
       'serve',
       '-repo',
       repoPath,
@@ -147,10 +151,10 @@ class FuchsiaPM {
   }
 
   Future<bool> _runPMCommand(List<String> args) async {
-    if (fuchsiaArtifacts.pm == null) {
+    if (globals.fuchsiaArtifacts.pm == null) {
       throwToolExit('Fuchsia pm tool not found');
     }
-    final List<String> command = <String>[fuchsiaArtifacts.pm.path, ...args];
+    final List<String> command = <String>[globals.fuchsiaArtifacts.pm.path, ...args];
     final RunResult result = await processUtils.run(command);
     return result.exitCode == 0;
   }
@@ -160,7 +164,7 @@ class FuchsiaPM {
 ///
 /// [FuchsiaPackageServer] takes care of initializing the package repository,
 /// spinning up the package server, publishing packages, and shutting down the
-/// the server.
+/// server.
 ///
 /// Example usage:
 /// var server = FuchsiaPackageServer(
@@ -176,7 +180,11 @@ class FuchsiaPM {
 ///   server.stop();
 /// }
 class FuchsiaPackageServer {
-  FuchsiaPackageServer(this._repo, this.name, this._host, this._port);
+  factory FuchsiaPackageServer(String repo, String name, String host, int port) {
+    return FuchsiaPackageServer._(repo, name, host, port);
+  }
+
+  FuchsiaPackageServer._(this._repo, this.name, this._host, this._port);
 
   static const String deviceHost = 'fuchsia.com';
   static const String toolHost = 'flutter_tool';
@@ -188,7 +196,15 @@ class FuchsiaPackageServer {
   Process _process;
 
   /// The URL that can be used by the device to access this package server.
-  String get url => 'http://$_host:$_port';
+  String get url => Uri(scheme: 'http', host: _host, port: _port).toString();
+
+  /// The URL that is stripped of interface name if it is an ipv6 address,
+  /// which should be supplied to amber_ctl to configure access to host
+  String get interfaceStrippedUrl => Uri(
+    scheme: 'http',
+    host: (isIPv6Address(_host.split('%').first)) ? '[${_host.split('%').first}]' : _host,
+    port: _port,
+  ).toString();
 
   // The name used to reference the server by fuchsia-pkg:// urls.
   final String name;

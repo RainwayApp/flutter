@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 import 'dart:ui' as ui show lerpDouble;
 
@@ -341,7 +343,8 @@ class AnimationController extends Animation<double>
   /// Stops the animation controller and sets the current value of the
   /// animation.
   ///
-  /// The new value is clamped to the range set by [lowerBound] and [upperBound].
+  /// The new value is clamped to the range set by [lowerBound] and
+  /// [upperBound].
   ///
   /// Value listeners are notified even if this does not change the value.
   /// Status listeners are notified if the animation was previously playing.
@@ -603,6 +606,10 @@ class AnimationController extends Animation<double>
   /// the starting value will alternate between [min] and [max] values on each
   /// repeat. The [status] will be reported as [AnimationStatus.reverse] when
   /// the animation runs from [max] to [min].
+  ///
+  /// Each run of the animation will have a duration of `period`. If `period` is not
+  /// provided, [duration] will be used instead, which has to be set before [repeat] is
+  /// called either in the constructor or later by using the [duration] setter.
   ///
   /// Returns a [TickerFuture] that never completes. The [TickerFuture.orCancel] future
   /// completes with an error when the animation is stopped (e.g. with [stop]).

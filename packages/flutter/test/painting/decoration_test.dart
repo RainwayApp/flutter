@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 @TestOn('!chrome')
 import 'dart:async';
 import 'dart:typed_data';
@@ -37,6 +39,22 @@ class SynchronousTestImageProvider extends ImageProvider<int> {
     return OneFrameImageStreamCompleter(
       SynchronousFuture<ImageInfo>(TestImageInfo(key, image: TestImage(), scale: 1.0))
     );
+  }
+}
+
+class SynchronousErrorTestImageProvider extends ImageProvider<int> {
+  const SynchronousErrorTestImageProvider(this.throwable);
+
+  final Object throwable;
+
+  @override
+  Future<int> obtainKey(ImageConfiguration configuration) {
+    throw throwable;
+  }
+
+  @override
+  ImageStreamCompleter load(int key, DecoderCallback decode) {
+    throw throwable;
   }
 }
 
@@ -263,10 +281,30 @@ void main() {
       '   direction provided in the ImageConfiguration object to match.\n'
       '   The DecorationImage was:\n'
       '     DecorationImage(SynchronousTestImageProvider(), center, match\n'
-      '     text direction)\n'
+      '     text direction, scale: 1.0)\n'
       '   The ImageConfiguration was:\n'
       '     ImageConfiguration(size: Size(100.0, 100.0))\n'
     );
+  });
+
+  test('DecorationImage - error listener', () async {
+    String exception;
+    final DecorationImage backgroundImage = DecorationImage(
+      image: const SynchronousErrorTestImageProvider('threw'),
+      onError: (dynamic error, StackTrace stackTrace) {
+        exception = error as String;
+      }
+    );
+
+    backgroundImage.createPainter(() { }).paint(
+      TestCanvas(),
+      Rect.largest,
+      Path(),
+      ImageConfiguration.empty,
+    );
+    // Yield so that the exception callback gets called before we check it.
+    await null;
+    expect(exception, 'threw');
   });
 
   test('BoxDecoration.lerp - shapes', () {
@@ -375,10 +413,10 @@ void main() {
   });
 
   test('Decoration.lerp with unrelated decorations', () {
-    expect(Decoration.lerp(const FlutterLogoDecoration(), const BoxDecoration(), 0.0), isA<FlutterLogoDecoration>()); // ignore: CONST_EVAL_THROWS_EXCEPTION
-    expect(Decoration.lerp(const FlutterLogoDecoration(), const BoxDecoration(), 0.25), isA<FlutterLogoDecoration>()); // ignore: CONST_EVAL_THROWS_EXCEPTION
-    expect(Decoration.lerp(const FlutterLogoDecoration(), const BoxDecoration(), 0.75), isA<BoxDecoration>()); // ignore: CONST_EVAL_THROWS_EXCEPTION
-    expect(Decoration.lerp(const FlutterLogoDecoration(), const BoxDecoration(), 1.0), isA<BoxDecoration>()); // ignore: CONST_EVAL_THROWS_EXCEPTION
+    expect(Decoration.lerp(const FlutterLogoDecoration(), const BoxDecoration(), 0.0), isA<FlutterLogoDecoration>());
+    expect(Decoration.lerp(const FlutterLogoDecoration(), const BoxDecoration(), 0.25), isA<FlutterLogoDecoration>());
+    expect(Decoration.lerp(const FlutterLogoDecoration(), const BoxDecoration(), 0.75), isA<BoxDecoration>());
+    expect(Decoration.lerp(const FlutterLogoDecoration(), const BoxDecoration(), 1.0), isA<BoxDecoration>());
   });
 
   test('paintImage BoxFit.none scale test', () {
@@ -498,7 +536,7 @@ void main() {
     // sourceRect should contain all pixels of the source image
     expect(call.positionalArguments[1], Offset.zero & imageSize);
 
-    // Image should be scaled down to fit in hejght
+    // Image should be scaled down to fit in height
     // and be positioned in the bottom right of the outputRect
     const Size expectedTileSize = Size(20.0, 20.0);
     final Rect expectedTileRect = Rect.fromPoints(
@@ -546,5 +584,35 @@ void main() {
       // Image should be positioned in the center of the container
       expect(call.positionalArguments[2].center, outputRect.center);
     }
+  });
+
+  test('scale cannot be null in DecorationImage', () {
+    try {
+      DecorationImage(scale: null, image: SynchronousTestImageProvider());
+    } on AssertionError catch (error) {
+      expect(error.toString(), contains('scale != null'));
+      expect(error.toString(), contains('is not true'));
+      return;
+    }
+    fail('DecorationImage did not throw AssertionError when scale was null');
+  });
+
+  test('DecorationImage scale test', () {
+    final DecorationImage backgroundImage = DecorationImage(
+      image: SynchronousTestImageProvider(),
+      scale: 4,
+      alignment: Alignment.topLeft
+    );
+
+    final BoxDecoration boxDecoration = BoxDecoration(image: backgroundImage);
+    final BoxPainter boxPainter = boxDecoration.createBoxPainter(() { assert(false); });
+    final TestCanvas canvas = TestCanvas(<Invocation>[]);
+    boxPainter.paint(canvas, Offset.zero, const ImageConfiguration(size: Size(100.0, 100.0)));
+
+    final Invocation call = canvas.invocations.firstWhere((Invocation call) => call.memberName == #drawImageRect);
+    // The image should scale down to Size(25.0, 25.0) from Size(100.0, 100.0)
+    // considering DecorationImage scale to be 4.0 and Image scale to be 1.0.
+    expect(call.positionalArguments[2].size, const Size(25.0, 25.0));
+    expect(call.positionalArguments[2], const Rect.fromLTRB(0.0, 0.0, 25.0, 25.0));
   });
 }

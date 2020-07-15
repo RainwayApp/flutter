@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -50,7 +52,7 @@ enum StretchMode {
 /// [FlexibleSpaceBar.createSettings], to convey sizing information down to the
 /// [FlexibleSpaceBar].
 ///
-/// {@tool sample --template=freeform}
+/// {@tool dartpad --template=freeform}
 /// This sample application demonstrates the different features of the
 /// [FlexibleSpaceBar] when used in a [SliverAppBar]. This app bar is configured
 /// to stretch into the overscroll space, and uses the
@@ -188,7 +190,7 @@ class FlexibleSpaceBar extends StatefulWidget {
   ///
   /// By default the value of this property is
   /// `EdgeInsetsDirectional.only(start: 72, bottom: 16)` if the title is
-  /// not centered, `EdgeInsetsDirectional.only(start 0, bottom: 16)` otherwise.
+  /// not centered, `EdgeInsetsDirectional.only(start: 0, bottom: 16)` otherwise.
   final EdgeInsetsGeometry titlePadding;
 
   /// Wraps a widget that contains an [AppBar] to convey sizing information down
@@ -237,6 +239,8 @@ class _FlexibleSpaceBarState extends State<FlexibleSpaceBar> {
     switch (theme.platform) {
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
         return false;
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
@@ -345,8 +349,10 @@ class _FlexibleSpaceBarState extends State<FlexibleSpaceBar> {
             case TargetPlatform.macOS:
               title = widget.title;
               break;
-            case TargetPlatform.fuchsia:
             case TargetPlatform.android:
+            case TargetPlatform.fuchsia:
+            case TargetPlatform.linux:
+            case TargetPlatform.windows:
               title = Semantics(
                 namesRoute: true,
                 child: widget.title,
@@ -367,7 +373,7 @@ class _FlexibleSpaceBarState extends State<FlexibleSpaceBar> {
 
           final double opacity = settings.toolbarOpacity;
           if (opacity > 0.0) {
-            TextStyle titleStyle = theme.primaryTextTheme.title;
+            TextStyle titleStyle = theme.primaryTextTheme.headline6;
             titleStyle = titleStyle.copyWith(
               color: titleStyle.color.withOpacity(opacity)
             );
@@ -390,7 +396,15 @@ class _FlexibleSpaceBarState extends State<FlexibleSpaceBar> {
                   alignment: titleAlignment,
                   child: DefaultTextStyle(
                     style: titleStyle,
-                    child: title,
+                    child: LayoutBuilder(
+                      builder: (BuildContext context, BoxConstraints constraints) {
+                        return Container(
+                          width: constraints.maxWidth / scaleValue,
+                          alignment: titleAlignment,
+                          child: title,
+                        );
+                      }
+                    ),
                   ),
                 ),
               ),

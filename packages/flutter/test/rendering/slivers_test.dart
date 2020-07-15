@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -92,8 +94,8 @@ void main() {
         ' │ │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         ' │ │   0.0, remainingPaintExtent: 600.0, crossAxisExtent: 800.0,\n'
         ' │ │   crossAxisDirection: AxisDirection.right,\n'
-        ' │ │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 850.0\n'
-        ' │ │   cacheOrigin: 0.0 )\n'
+        ' │ │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 850.0,\n'
+        ' │ │   cacheOrigin: 0.0)\n'
         ' │ │ geometry: SliverGeometry(scrollExtent: 400.0, paintExtent: 400.0,\n'
         ' │ │   maxPaintExtent: 400.0, cacheExtent: 400.0)\n'
         ' │ │\n'
@@ -108,8 +110,8 @@ void main() {
         ' │ │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         ' │ │   0.0, remainingPaintExtent: 200.0, crossAxisExtent: 800.0,\n'
         ' │ │   crossAxisDirection: AxisDirection.right,\n'
-        ' │ │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 450.0\n'
-        ' │ │   cacheOrigin: 0.0 )\n'
+        ' │ │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 450.0,\n'
+        ' │ │   cacheOrigin: 0.0)\n'
         ' │ │ geometry: SliverGeometry(scrollExtent: 400.0, paintExtent: 200.0,\n'
         ' │ │   maxPaintExtent: 400.0, hasVisualOverflow: true, cacheExtent:\n'
         ' │ │   400.0)\n'
@@ -125,8 +127,8 @@ void main() {
         ' │ │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         ' │ │   0.0, remainingPaintExtent: 0.0, crossAxisExtent: 800.0,\n'
         ' │ │   crossAxisDirection: AxisDirection.right,\n'
-        ' │ │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 50.0\n'
-        ' │ │   cacheOrigin: 0.0 )\n'
+        ' │ │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 50.0,\n'
+        ' │ │   cacheOrigin: 0.0)\n'
         ' │ │ geometry: SliverGeometry(scrollExtent: 400.0, hidden,\n'
         ' │ │   maxPaintExtent: 400.0, hasVisualOverflow: true, cacheExtent:\n'
         ' │ │   50.0)\n'
@@ -142,8 +144,8 @@ void main() {
         ' │ │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         ' │ │   0.0, remainingPaintExtent: 0.0, crossAxisExtent: 800.0,\n'
         ' │ │   crossAxisDirection: AxisDirection.right,\n'
-        ' │ │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 0.0\n'
-        ' │ │   cacheOrigin: 0.0 )\n'
+        ' │ │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 0.0,\n'
+        ' │ │   cacheOrigin: 0.0)\n'
         ' │ │ geometry: SliverGeometry(scrollExtent: 400.0, hidden,\n'
         ' │ │   maxPaintExtent: 400.0, hasVisualOverflow: true)\n'
         ' │ │\n'
@@ -158,8 +160,8 @@ void main() {
         '   │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         '   │   0.0, remainingPaintExtent: 0.0, crossAxisExtent: 800.0,\n'
         '   │   crossAxisDirection: AxisDirection.right,\n'
-        '   │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 0.0\n'
-        '   │   cacheOrigin: 0.0 )\n'
+        '   │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 0.0,\n'
+        '   │   cacheOrigin: 0.0)\n'
         '   │ geometry: SliverGeometry(scrollExtent: 400.0, hidden,\n'
         '   │   maxPaintExtent: 400.0, hasVisualOverflow: true)\n'
         '   │\n'
@@ -921,6 +923,36 @@ void main() {
       mainAxisPositions.clear();
       crossAxisPositions.clear();
     });
+
+    test('addWithAxisOffset with non zero paintOffset', () {
+      final SliverHitTestResult result = SliverHitTestResult();
+      double recordedMainAxisPosition;
+      double recordedCrossAxisPosition;
+      final HitTestEntry entry = HitTestEntry(_DummyHitTestTarget());
+      const Offset paintOffset = Offset(7, 11);
+
+      final bool isHit = result.addWithAxisOffset(
+        paintOffset: paintOffset,
+        mainAxisOffset: 5.0,
+        crossAxisOffset: 6.0,
+        mainAxisPosition: 10.0,
+        crossAxisPosition: 20.0,
+        hitTest: (SliverHitTestResult result, { double mainAxisPosition, double crossAxisPosition }) {
+          expect(result, isNotNull);
+          recordedMainAxisPosition = mainAxisPosition;
+          recordedCrossAxisPosition = crossAxisPosition;
+          result.add(entry);
+          return true;
+        },
+      );
+      expect(isHit, isTrue);
+      expect(recordedMainAxisPosition, 10.0 - 5.0);
+      expect(recordedCrossAxisPosition, 20.0 - 6.0);
+      expect(
+        entry.transform..translate(paintOffset.dx, paintOffset.dy),
+        Matrix4.identity(),
+      );
+    });
   });
 
   test('SliverConstraints check for NaN on all double properties', () {
@@ -956,7 +988,7 @@ void main() {
         '  The "precedingScrollExtent" is NaN, expected greater than or equal to zero.\n'
         '  The constraints are not normalized.\n'
         'The offending constraints were:\n'
-        '  SliverConstraints(AxisDirection.down, GrowthDirection.forward, ScrollDirection.idle, scrollOffset: NaN, remainingPaintExtent: NaN, overlap: NaN, crossAxisExtent: NaN, crossAxisDirection: AxisDirection.left, viewportMainAxisExtent: NaN, remainingCacheExtent: NaN cacheOrigin: NaN )',
+        '  SliverConstraints(AxisDirection.down, GrowthDirection.forward, ScrollDirection.idle, scrollOffset: NaN, remainingPaintExtent: NaN, overlap: NaN, crossAxisExtent: NaN, crossAxisDirection: AxisDirection.left, viewportMainAxisExtent: NaN, remainingCacheExtent: NaN, cacheOrigin: NaN)',
       );
       threw = true;
     }
@@ -992,7 +1024,7 @@ void main() {
         '  The "precedingScrollExtent" is negative.\n'
         '  The constraints are not normalized.\n'
         'The offending constraints were:\n'
-        '  SliverConstraints(AxisDirection.down, GrowthDirection.forward, ScrollDirection.idle, scrollOffset: -1.0, remainingPaintExtent: -1.0, crossAxisExtent: 0.0, crossAxisDirection: AxisDirection.left, viewportMainAxisExtent: 0.0, remainingCacheExtent: -1.0 cacheOrigin: 1.0 )',
+        '  SliverConstraints(AxisDirection.down, GrowthDirection.forward, ScrollDirection.idle, scrollOffset: -1.0, remainingPaintExtent: -1.0, crossAxisExtent: 0.0, crossAxisDirection: AxisDirection.left, viewportMainAxisExtent: 0.0, remainingCacheExtent: -1.0, cacheOrigin: 1.0)',
       );
       threw = true;
     }

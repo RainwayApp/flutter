@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -10,15 +13,24 @@ import 'package:flutter/widgets.dart';
 
 import 'bottom_sheet_theme.dart';
 import 'colors.dart';
+import 'curves.dart';
 import 'debug.dart';
 import 'material.dart';
 import 'material_localizations.dart';
 import 'scaffold.dart';
 import 'theme.dart';
 
-const Duration _bottomSheetDuration = Duration(milliseconds: 200);
+const Duration _bottomSheetEnterDuration = Duration(milliseconds: 250);
+const Duration _bottomSheetExitDuration = Duration(milliseconds: 200);
+const Curve _modalBottomSheetCurve = decelerateEasing;
 const double _minFlingVelocity = 700.0;
 const double _closeProgressThreshold = 0.5;
+
+typedef BottomSheetDragStartHandler = void Function(DragStartDetails details);
+typedef BottomSheetDragEndHandler = void Function(
+  DragEndDetails details, {
+  bool isClosing,
+});
 
 /// A material design bottom sheet.
 ///
@@ -57,6 +69,8 @@ class BottomSheet extends StatefulWidget {
     Key key,
     this.animationController,
     this.enableDrag = true,
+    this.onDragStart,
+    this.onDragEnd,
     this.backgroundColor,
     this.elevation,
     this.shape,
@@ -94,6 +108,21 @@ class BottomSheet extends StatefulWidget {
   ///
   /// Default is true.
   final bool enableDrag;
+
+  /// Called when the user begins dragging the bottom sheet vertically, if
+  /// [enableDrag] is true.
+  ///
+  /// Would typically be used to change the bottom sheet animation curve so
+  /// that it tracks the user's finger accurately.
+  final BottomSheetDragStartHandler onDragStart;
+
+  /// Called when the user stops dragging the bottom sheet, if [enableDrag]
+  /// is true.
+  ///
+  /// Would typically be used to reset the bottom sheet animation curve, so
+  /// that it animates non-linearly. Called before [onClosing] if the bottom
+  /// sheet is closing.
+  final BottomSheetDragEndHandler onDragEnd;
 
   /// The bottom sheet's background color.
   ///
@@ -140,7 +169,8 @@ class BottomSheet extends StatefulWidget {
   /// animation controller could be provided.
   static AnimationController createAnimationController(TickerProvider vsync) {
     return AnimationController(
-      duration: _bottomSheetDuration,
+      duration: _bottomSheetEnterDuration,
+      reverseDuration: _bottomSheetExitDuration,
       debugLabel: 'BottomSheet',
       vsync: vsync,
     );
@@ -158,6 +188,12 @@ class _BottomSheetState extends State<BottomSheet> {
 
   bool get _dismissUnderway => widget.animationController.status == AnimationStatus.reverse;
 
+  void _handleDragStart(DragStartDetails details) {
+    if (widget.onDragStart != null) {
+      widget.onDragStart(details);
+    }
+  }
+
   void _handleDragUpdate(DragUpdateDetails details) {
     assert(widget.enableDrag);
     if (_dismissUnderway)
@@ -169,21 +205,33 @@ class _BottomSheetState extends State<BottomSheet> {
     assert(widget.enableDrag);
     if (_dismissUnderway)
       return;
+    bool isClosing = false;
     if (details.velocity.pixelsPerSecond.dy > _minFlingVelocity) {
       final double flingVelocity = -details.velocity.pixelsPerSecond.dy / _childHeight;
       if (widget.animationController.value > 0.0) {
         widget.animationController.fling(velocity: flingVelocity);
       }
       if (flingVelocity < 0.0) {
-        widget.onClosing();
+        isClosing = true;
       }
     } else if (widget.animationController.value < _closeProgressThreshold) {
       if (widget.animationController.value > 0.0)
         widget.animationController.fling(velocity: -1.0);
-      widget.onClosing();
+      isClosing = true;
     } else {
       widget.animationController.forward();
-   }
+    }
+
+    if (widget.onDragEnd != null) {
+      widget.onDragEnd(
+        details,
+        isClosing: isClosing,
+      );
+    }
+
+    if (isClosing) {
+      widget.onClosing();
+    }
   }
 
   bool extentChanged(DraggableScrollableNotification notification) {
@@ -213,6 +261,7 @@ class _BottomSheetState extends State<BottomSheet> {
       ),
     );
     return !widget.enableDrag ? bottomSheet : GestureDetector(
+      onVerticalDragStart: _handleDragStart,
       onVerticalDragUpdate: _handleDragUpdate,
       onVerticalDragEnd: _handleDragEnd,
       child: bottomSheet,
@@ -283,6 +332,8 @@ class _ModalBottomSheet<T> extends StatefulWidget {
 }
 
 class _ModalBottomSheetState<T> extends State<_ModalBottomSheet<T>> {
+  ParametricCurve<double> animationCurve = _modalBottomSheetCurve;
+
   String _getRouteLabel(MaterialLocalizations localizations) {
     switch (Theme.of(context).platform) {
       case TargetPlatform.iOS:
@@ -290,9 +341,24 @@ class _ModalBottomSheetState<T> extends State<_ModalBottomSheet<T>> {
         return '';
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
         return localizations.dialogLabel;
     }
     return null;
+  }
+
+  void handleDragStart(DragStartDetails details) {
+    // Allow the bottom sheet to track the user's finger accurately.
+    animationCurve = Curves.linear;
+  }
+
+  void handleDragEnd(DragEndDetails details, {bool isClosing}) {
+    // Allow the bottom sheet to animate smoothly from its current position.
+    animationCurve = _BottomSheetSuspendedCurve(
+      widget.route.animation.value,
+      curve: _modalBottomSheetCurve,
+    );
   }
 
   @override
@@ -305,10 +371,28 @@ class _ModalBottomSheetState<T> extends State<_ModalBottomSheet<T>> {
 
     return AnimatedBuilder(
       animation: widget.route.animation,
+      child: BottomSheet(
+        animationController: widget.route._animationController,
+        onClosing: () {
+          if (widget.route.isCurrent) {
+            Navigator.pop(context);
+          }
+        },
+        builder: widget.route.builder,
+        backgroundColor: widget.backgroundColor,
+        elevation: widget.elevation,
+        shape: widget.shape,
+        clipBehavior: widget.clipBehavior,
+        enableDrag: widget.enableDrag,
+        onDragStart: handleDragStart,
+        onDragEnd: handleDragEnd,
+      ),
       builder: (BuildContext context, Widget child) {
         // Disable the initial animation when accessible navigation is on so
         // that the semantics are added to the tree at the correct time.
-        final double animationValue = mediaQuery.accessibleNavigation ? 1.0 : widget.route.animation.value;
+        final double animationValue = animationCurve.transform(
+            mediaQuery.accessibleNavigation ? 1.0 : widget.route.animation.value
+        );
         return Semantics(
           scopesRoute: true,
           namesRoute: true,
@@ -317,20 +401,7 @@ class _ModalBottomSheetState<T> extends State<_ModalBottomSheet<T>> {
           child: ClipRect(
             child: CustomSingleChildLayout(
               delegate: _ModalBottomSheetLayout(animationValue, widget.isScrollControlled),
-              child: BottomSheet(
-                animationController: widget.route._animationController,
-                onClosing: () {
-                  if (widget.route.isCurrent) {
-                    Navigator.pop(context);
-                  }
-                },
-                builder: widget.route.builder,
-                backgroundColor: widget.backgroundColor,
-                elevation: widget.elevation,
-                shape: widget.shape,
-                clipBehavior: widget.clipBehavior,
-                enableDrag: widget.enableDrag,
-              ),
+              child: child,
             ),
           ),
         );
@@ -370,7 +441,10 @@ class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
   final bool enableDrag;
 
   @override
-  Duration get transitionDuration => _bottomSheetDuration;
+  Duration get transitionDuration => _bottomSheetEnterDuration;
+
+  @override
+  Duration get reverseTransitionDuration => _bottomSheetExitDuration;
 
   @override
   bool get barrierDismissible => isDismissible;
@@ -382,7 +456,6 @@ class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
   Color get barrierColor => modalBarrierColor ?? Colors.black54;
 
   AnimationController _animationController;
-
 
   @override
   AnimationController createAnimationController() {
@@ -412,6 +485,64 @@ class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
     if (theme != null)
       bottomSheet = Theme(data: theme, child: bottomSheet);
     return bottomSheet;
+  }
+}
+
+// TODO(guidezpl): Look into making this public. A copy of this class is in
+//  scaffold.dart, for now, https://github.com/flutter/flutter/issues/51627
+/// A curve that progresses linearly until a specified [startingPoint], at which
+/// point [curve] will begin. Unlike [Interval], [curve] will not start at zero,
+/// but will use [startingPoint] as the Y position.
+///
+/// For example, if [startingPoint] is set to `0.5`, and [curve] is set to
+/// [Curves.easeOut], then the bottom-left quarter of the curve will be a
+/// straight line, and the top-right quarter will contain the entire contents of
+/// [Curves.easeOut].
+///
+/// This is useful in situations where a widget must track the user's finger
+/// (which requires a linear animation), and afterwards can be flung using a
+/// curve specified with the [curve] argument, after the finger is released. In
+/// such a case, the value of [startingPoint] would be the progress of the
+/// animation at the time when the finger was released.
+///
+/// The [startingPoint] and [curve] arguments must not be null.
+class _BottomSheetSuspendedCurve extends ParametricCurve<double> {
+  /// Creates a suspended curve.
+  const _BottomSheetSuspendedCurve(
+    this.startingPoint, {
+    this.curve = Curves.easeOutCubic,
+  }) : assert(startingPoint != null),
+       assert(curve != null);
+
+  /// The progress value at which [curve] should begin.
+  ///
+  /// This defaults to [Curves.easeOutCubic].
+  final double startingPoint;
+
+  /// The curve to use when [startingPoint] is reached.
+  final Curve curve;
+
+  @override
+  double transform(double t) {
+    assert(t >= 0.0 && t <= 1.0);
+    assert(startingPoint >= 0.0 && startingPoint <= 1.0);
+
+    if (t < startingPoint) {
+      return t;
+    }
+
+    if (t == 1.0) {
+      return t;
+    }
+
+    final double curveProgress = (t - startingPoint) / (1 - startingPoint);
+    final double transformed = curve.transform(curveProgress);
+    return lerpDouble(startingPoint, 1, transformed);
+  }
+
+  @override
+  String toString() {
+    return '${describeIdentity(this)}($startingPoint, $curve)';
   }
 }
 
@@ -446,18 +577,20 @@ class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
 /// dismissed when user taps on the scrim.
 ///
 /// The [enableDrag] parameter specifies whether the bottom sheet can be
-/// dragged up and down and dismissed by swiping downards.
+/// dragged up and down and dismissed by swiping downwards.
 ///
 /// The optional [backgroundColor], [elevation], [shape], and [clipBehavior]
 /// parameters can be passed in to customize the appearance and behavior of
 /// modal bottom sheets.
 ///
+/// The optional `routeSettings` parameter sets the [RouteSettings] of the modal bottom sheet
+/// sheet. This is particularly useful in the case that a user wants to observe
+/// [PopupRoute]s within a [NavigatorObserver].
+///
 /// Returns a `Future` that resolves to the value (if any) that was passed to
 /// [Navigator.pop] when the modal bottom sheet was closed.
 ///
-/// {@animation 350 622 https://flutter.github.io/assets-for-api-docs/assets/material/show_modal_bottom_sheet.mp4}
-///
-/// {@tool sample --template=stateless_widget_scaffold}
+/// {@tool dartpad --template=stateless_widget_scaffold}
 ///
 /// This example demonstrates how to use `showModalBottomSheet` to display a
 /// bottom sheet that obscures the content behind it when a user taps a button.
@@ -519,6 +652,7 @@ Future<T> showModalBottomSheet<T>({
   bool useRootNavigator = false,
   bool isDismissible = true,
   bool enableDrag = true,
+  RouteSettings routeSettings,
 }) {
   assert(context != null);
   assert(builder != null);
@@ -541,6 +675,7 @@ Future<T> showModalBottomSheet<T>({
     isDismissible: isDismissible,
     modalBarrierColor: barrierColor,
     enableDrag: enableDrag,
+    settings: routeSettings,
   ));
 }
 

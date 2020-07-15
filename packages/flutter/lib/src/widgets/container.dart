@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/rendering.dart';
@@ -43,50 +45,6 @@ import 'image.dart';
 /// )
 /// ```
 /// {@end-tool}
-///
-/// ## Layout behavior
-///
-/// _See [BoxConstraints] for an introduction to box layout models._
-///
-/// Since [Container] combines a number of other widgets each with their own
-/// layout behavior, [Container]'s layout behavior is somewhat complicated.
-///
-/// Summary: [Container] tries, in order: to honor [alignment], to size itself to
-/// the [child], to honor the `width`, `height`, and [constraints], to expand to
-/// fit the parent, to be as small as possible.
-///
-/// More specifically:
-///
-/// If the widget has no child, no `height`, no `width`, no [constraints],
-/// and the parent provides unbounded constraints, then [Container] tries to
-/// size as small as possible.
-///
-/// If the widget has no child and no [alignment], but a `height`, `width`, or
-/// [constraints] are provided, then the [Container] tries to be as small as
-/// possible given the combination of those constraints and the parent's
-/// constraints.
-///
-/// If the widget has no child, no `height`, no `width`, no [constraints], and
-/// no [alignment], but the parent provides bounded constraints, then
-/// [Container] expands to fit the constraints provided by the parent.
-///
-/// If the widget has an [alignment], and the parent provides unbounded
-/// constraints, then the [Container] tries to size itself around the child.
-///
-/// If the widget has an [alignment], and the parent provides bounded
-/// constraints, then the [Container] tries to expand to fit the parent, and
-/// then positions the child within itself as per the [alignment].
-///
-/// Otherwise, the widget has a [child] but no `height`, no `width`, no
-/// [constraints], and no [alignment], and the [Container] passes the
-/// constraints from the parent to the child and sizes itself to match the
-/// child.
-///
-/// The [margin] and [padding] properties also affect the layout, as described
-/// in the documentation for those properties. (Their effects merely augment the
-/// rules described above.) The [decoration] can implicitly increase the
-/// [padding] (e.g. borders in a [BoxDecoration] contribute to the [padding]);
-/// see [Decoration.padding].
 ///
 /// See also:
 ///
@@ -184,6 +142,11 @@ class DecoratedBox extends SingleChildRenderObjectWidget {
 /// `width`, `height`, and [constraints] arguments to the constructor override
 /// this.
 ///
+/// By default, containers return false for all hit tests. If the [color]
+/// property is specified, the hit testing is handled by [ColoredBox], which
+/// always returns true. If the [decoration] or [foregroundDecoration] properties
+/// are specified, hit testing is handled by [Decoration.hitTest].
+///
 /// ## Layout behavior
 ///
 /// _See [BoxConstraints] for an introduction to box layout models._
@@ -266,7 +229,7 @@ class DecoratedBox extends SingleChildRenderObjectWidget {
 /// ```dart
 /// Container(
 ///   constraints: BoxConstraints.expand(
-///     height: Theme.of(context).textTheme.display1.fontSize * 1.1 + 200.0,
+///     height: Theme.of(context).textTheme.headline4.fontSize * 1.1 + 200.0,
 ///   ),
 ///   padding: const EdgeInsets.all(8.0),
 ///   color: Colors.blue[600],
@@ -274,7 +237,7 @@ class DecoratedBox extends SingleChildRenderObjectWidget {
 ///   child: Text('Hello World',
 ///     style: Theme.of(context)
 ///         .textTheme
-///         .display1
+///         .headline4
 ///         .copyWith(color: Colors.white)),
 ///   transform: Matrix4.rotationZ(0.1),
 /// )
@@ -294,17 +257,16 @@ class Container extends StatelessWidget {
   ///
   /// The `height` and `width` values include the padding.
   ///
-  /// The `color` argument is a shorthand for `decoration: new
-  /// BoxDecoration(color: color)`, which means you cannot supply both a `color`
-  /// and a `decoration` argument. If you want to have both a `color` and a
-  /// `decoration`, you can pass the color as the `color` argument to the
-  /// `BoxDecoration`.
+  /// The `color` and `decoration` arguments cannot both be supplied, since
+  /// it would potentially result in the decoration drawing over the background
+  /// color. To supply a decoration with a color, use `decoration:
+  /// BoxDecoration(color: color)`.
   Container({
     Key key,
     this.alignment,
     this.padding,
-    Color color,
-    Decoration decoration,
+    this.color,
+    this.decoration,
     this.foregroundDecoration,
     double width,
     double height,
@@ -320,9 +282,8 @@ class Container extends StatelessWidget {
        assert(clipBehavior != null),
        assert(color == null || decoration == null,
          'Cannot provide both a color and a decoration\n'
-         'The color argument is just a shorthand for "decoration: new BoxDecoration(color: color)".'
+         'To provide both, use "decoration: BoxDecoration(color: color)".'
        ),
-       decoration = decoration ?? (color != null ? BoxDecoration(color: color) : null),
        constraints =
         (width != null || height != null)
           ? constraints?.tighten(width: width, height: height)
@@ -363,11 +324,20 @@ class Container extends StatelessWidget {
   /// see [Decoration.padding].
   final EdgeInsetsGeometry padding;
 
+  /// The color to paint behind the [child].
+  ///
+  /// This property should be preferred when the background is a simple color.
+  /// For other cases, such as gradients or images, use the [decoration]
+  /// property.
+  ///
+  /// If the [decoration] is used, this property must be null. A background
+  /// color may still be painted by the [decoration] even if this property is
+  /// null.
+  final Color color;
+
   /// The decoration to paint behind the [child].
   ///
-  /// A shorthand for specifying just a solid color is available in the
-  /// constructor: set the `color` argument instead of the `decoration`
-  /// argument.
+  /// Use the [color] property to specify a simple solid color.
   ///
   /// The [child] is not clipped to the decoration. To clip a child to the shape
   /// of a particular [ShapeDecoration], consider using a [ClipPath] widget.
@@ -423,6 +393,9 @@ class Container extends StatelessWidget {
     if (effectivePadding != null)
       current = Padding(padding: effectivePadding, child: current);
 
+    if (color != null)
+      current = ColoredBox(color: color, child: current);
+
     if (decoration != null)
       current = DecoratedBox(decoration: decoration, child: current);
 
@@ -463,7 +436,10 @@ class Container extends StatelessWidget {
     properties.add(DiagnosticsProperty<AlignmentGeometry>('alignment', alignment, showName: false, defaultValue: null));
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('padding', padding, defaultValue: null));
     properties.add(DiagnosticsProperty<Clip>('clipBehavior', clipBehavior, defaultValue: Clip.none));
-    properties.add(DiagnosticsProperty<Decoration>('bg', decoration, defaultValue: null));
+    if (color != null)
+      properties.add(DiagnosticsProperty<Color>('bg', color));
+    else
+      properties.add(DiagnosticsProperty<Decoration>('bg', decoration, defaultValue: null));
     properties.add(DiagnosticsProperty<Decoration>('fg', foregroundDecoration, defaultValue: null));
     properties.add(DiagnosticsProperty<BoxConstraints>('constraints', constraints, defaultValue: null));
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('margin', margin, defaultValue: null));

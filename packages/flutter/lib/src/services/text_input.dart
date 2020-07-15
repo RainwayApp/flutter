@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:ui' show
@@ -16,6 +18,7 @@ import 'dart:ui' show
 import 'package:flutter/foundation.dart';
 import 'package:vector_math/vector_math_64.dart' show Matrix4;
 
+import 'autofill.dart';
 import 'message_codec.dart';
 import 'platform_channel.dart';
 import 'system_channels.dart';
@@ -23,9 +26,6 @@ import 'system_chrome.dart';
 import 'text_editing.dart';
 
 export 'dart:ui' show TextAffinity;
-
-// Whether we're compiled to JavaScript in a web browser.
-const bool _kIsBrowser = identical(0, 0.0);
 
 /// Indicates how to handle the intelligent replacement of dashes in text input.
 ///
@@ -82,6 +82,7 @@ enum SmartQuotesType {
 /// This class stays as close to [Enum] interface as possible, and allows
 /// for additional flags for some input types. For example, numeric input
 /// can specify whether it supports decimal numbers and/or signed numbers.
+@immutable
 class TextInputType {
   const TextInputType._(this.index)
     : signed = null,
@@ -158,14 +159,33 @@ class TextInputType {
   /// Requests a keyboard with ready access to both letters and numbers.
   static const TextInputType visiblePassword = TextInputType._(7);
 
+  /// Optimized for a person's name.
+  ///
+  /// On iOS, requests the
+  /// [UIKeyboardType.namePhonePad](https://developer.apple.com/documentation/uikit/uikeyboardtype/namephonepad)
+  /// keyboard, a keyboard optimized for entering a person’s name or phone number.
+  /// Does not support auto-capitalization.
+  ///
+  /// On Android, requests a keyboard optimized for
+  /// [TYPE_TEXT_VARIATION_PERSON_NAME](https://developer.android.com/reference/android/text/InputType#TYPE_TEXT_VARIATION_PERSON_NAME).
+  static const TextInputType name = TextInputType._(8);
+
+  /// Optimized for postal mailing addresses.
+  ///
+  /// On iOS, requests the default keyboard.
+  ///
+  /// On Android, requests a keyboard optimized for
+  /// [TYPE_TEXT_VARIATION_POSTAL_ADDRESS](https://developer.android.com/reference/android/text/InputType#TYPE_TEXT_VARIATION_POSTAL_ADDRESS).
+  static const TextInputType streetAddress = TextInputType._(9);
+
   /// All possible enum values.
   static const List<TextInputType> values = <TextInputType>[
-    text, multiline, number, phone, datetime, emailAddress, url, visiblePassword,
+    text, multiline, number, phone, datetime, emailAddress, url, visiblePassword, name, streetAddress,
   ];
 
   // Corresponding string name for each of the [values].
   static const List<String> _names = <String>[
-    'text', 'multiline', 'number', 'phone', 'datetime', 'emailAddress', 'url', 'visiblePassword',
+    'text', 'multiline', 'number', 'phone', 'datetime', 'emailAddress', 'url', 'visiblePassword', 'name', 'address',
   ];
 
   // Enum value name, this is what enum.toString() would normally return.
@@ -440,6 +460,7 @@ class TextInputConfiguration {
     this.inputAction = TextInputAction.done,
     this.keyboardAppearance = Brightness.light,
     this.textCapitalization = TextCapitalization.none,
+    this.autofillConfiguration,
   }) : assert(inputType != null),
        assert(obscureText != null),
        smartDashesType = smartDashesType ?? (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
@@ -462,6 +483,14 @@ class TextInputConfiguration {
   ///
   /// Defaults to true.
   final bool autocorrect;
+
+  /// The configuration to use for autofill.
+  ///
+  /// Defaults to null, in which case no autofill information will be provided
+  /// to the platform. This will prevent the corresponding input field from
+  /// participating in autofills triggered by other fields. Additionally, on
+  /// Android and web, setting [autofillConfiguration] to null disables autofill.
+  final AutofillConfiguration autofillConfiguration;
 
   /// {@template flutter.services.textInput.smartDashesType}
   /// Whether to allow the platform to automatically format dashes.
@@ -564,6 +593,7 @@ class TextInputConfiguration {
       'inputAction': inputAction.toString(),
       'textCapitalization': textCapitalization.toString(),
       'keyboardAppearance': keyboardAppearance.toString(),
+      if (autofillConfiguration != null) 'autofill': autofillConfiguration.toJson(),
     };
   }
 }
@@ -684,6 +714,17 @@ class TextEditingValue {
     );
   }
 
+  /// Whether the [composing] range is a valid range within [text].
+  ///
+  /// Returns true if and only if the [composing] range is normalized, its start
+  /// is greater than or equal to 0, and its end is less than or equal to
+  /// [text]'s length.
+  ///
+  /// If this property is false while the [composing] range's `isValid` is true,
+  /// it usually indicates the current [composing] range is invalid because of a
+  /// programming error.
+  bool get isComposingRangeValid => composing.isValid && composing.isNormalized && composing.end <= text.length;
+
   @override
   String toString() => '${objectRuntimeType(this, 'TextEditingValue')}(text: \u2524$text\u251C, selection: $selection, composing: $composing)';
 
@@ -744,6 +785,21 @@ abstract class TextInputClient {
   /// const constructors so that they can be used in const expressions.
   const TextInputClient();
 
+  /// The current state of the [TextEditingValue] held by this client.
+  TextEditingValue get currentTextEditingValue;
+
+  /// The [AutofillScope] this [TextInputClient] belongs to, if any.
+  ///
+  /// It should return null if this [TextInputClient] does not need autofill
+  /// support. For a [TextInputClient] that supports autofill, returning null
+  /// causes it to participate in autofill alone.
+  ///
+  /// See also:
+  ///
+  /// * [AutofillGroup], a widget that creates an [AutofillScope] for its
+  ///   descendent autofillable [TextInputClient]s.
+  AutofillScope get currentAutofillScope;
+
   /// Requests that this client update its editing state to the given value.
   void updateEditingValue(TextEditingValue value);
 
@@ -753,8 +809,11 @@ abstract class TextInputClient {
   /// Updates the floating cursor position and state.
   void updateFloatingCursor(RawFloatingCursorPoint point);
 
-  /// The current state of the [TextEditingValue] held by this client.
-  TextEditingValue get currentTextEditingValue;
+  /// Requests that this client display a prompt rectangle for the given text range,
+  /// to indicate the range of text that will be changed by a pending autocorrection.
+  ///
+  /// This method will only be called on iOS.
+  void showAutocorrectionPromptRect(int start, int end);
 
   /// Platform notified framework of closed connection.
   ///
@@ -800,6 +859,17 @@ class TextInputConnection {
   void show() {
     assert(attached);
     TextInput._instance._show();
+  }
+
+  /// Requests the platform autofill UI to appear.
+  ///
+  /// The call has no effect unless the currently attached client supports
+  /// autofill, and the platform has a standalone autofill UI (for example, this
+  /// call has no effect on iOS since its autofill UI is part of the software
+  /// keyboard).
+  void requestAutofill() {
+    assert(attached);
+    TextInput._instance._requestAutofill();
   }
 
   /// Requests that the text input control change its internal state to match the given state.
@@ -890,7 +960,7 @@ TextInputAction _toTextInputAction(String action) {
       return TextInputAction.send;
     case 'TextInputAction.next':
       return TextInputAction.next;
-    case 'TextInputAction.previuos':
+    case 'TextInputAction.previous':
       return TextInputAction.previous;
     case 'TextInputAction.continue_action':
       return TextInputAction.continueAction;
@@ -930,7 +1000,11 @@ RawFloatingCursorPoint _toTextPoint(FloatingCursorDragState state, Map<String, d
   return RawFloatingCursorPoint(offset: offset, state: state);
 }
 
-/// An interface to the system's text input control.
+/// An low-level interface to the system's text input control.
+///
+/// See also:
+///
+///  * [TextField], a widget in which the user may enter text.
 class TextInput {
   TextInput._() {
     _channel = SystemChannels.textInput;
@@ -1015,7 +1089,7 @@ class TextInput {
 
   static bool _debugEnsureInputActionWorksOnPlatform(TextInputAction inputAction) {
     assert(() {
-      if (_kIsBrowser) {
+      if (kIsWeb) {
         // TODO(flutterweb): what makes sense here?
         return true;
       }
@@ -1058,6 +1132,22 @@ class TextInput {
     }
 
     final List<dynamic> args = methodCall.arguments as List<dynamic>;
+
+    if (method == 'TextInputClient.updateEditingStateWithTag') {
+      final TextInputClient client = _currentConnection._client;
+      assert(client != null);
+      final AutofillScope scope = client.currentAutofillScope;
+      final Map<String, dynamic> editingValue = args[1] as Map<String, dynamic>;
+      for (final String tag in editingValue.keys) {
+        final TextEditingValue textEditingValue = TextEditingValue.fromJSON(
+          editingValue[tag] as Map<String, dynamic>,
+        );
+        scope?.getAutofillClient(tag)?.updateEditingValue(textEditingValue);
+      }
+
+      return;
+    }
+
     final int client = args[0] as int;
     // The incoming message was for a different client.
     if (client != _currentConnection._id)
@@ -1077,6 +1167,9 @@ class TextInput {
         break;
       case 'TextInputClient.onConnectionClosed':
         _currentConnection._client.connectionClosed();
+        break;
+      case 'TextInputClient.showAutocorrectionPromptRect':
+        _currentConnection._client.showAutocorrectionPromptRect(args[1] as int, args[2] as int);
         break;
       default:
         throw MissingPluginException();
@@ -1116,6 +1209,10 @@ class TextInput {
 
   void _show() {
     _channel.invokeMethod<void>('TextInput.show');
+  }
+
+  void _requestAutofill() {
+    _channel.invokeMethod<void>('TextInput.requestAutofill');
   }
 
   void _setEditableSizeAndTransform(Map<String, dynamic> args) {

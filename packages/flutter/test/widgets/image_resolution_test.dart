@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 @TestOn('!chrome') // asset bundle behaves differently.
 import 'dart:async';
 import 'dart:typed_data';
@@ -103,7 +105,7 @@ class FakeImageStreamCompleter extends ImageStreamCompleter {
 }
 
 class TestAssetImage extends AssetImage {
-  TestAssetImage(String name) : super(name);
+  const TestAssetImage(String name) : super(name);
 
   @override
   ImageStreamCompleter load(AssetBundleImageKey key, DecoderCallback decode) {

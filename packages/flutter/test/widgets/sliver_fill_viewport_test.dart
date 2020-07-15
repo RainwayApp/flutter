@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
@@ -72,8 +74,8 @@ void main() {
         ' │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         ' │   0.0, remainingPaintExtent: 600.0, crossAxisExtent: 800.0,\n'
         ' │   crossAxisDirection: AxisDirection.right,\n'
-        ' │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 850.0\n'
-        ' │   cacheOrigin: 0.0 )\n'
+        ' │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 850.0,\n'
+        ' │   cacheOrigin: 0.0)\n'
         ' │ geometry: SliverGeometry(scrollExtent: 12000.0, paintExtent:\n'
         ' │   600.0, maxPaintExtent: 12000.0, hasVisualOverflow: true,\n'
         ' │   cacheExtent: 850.0)\n'
@@ -85,8 +87,8 @@ void main() {
         '   │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         '   │   0.0, remainingPaintExtent: 600.0, crossAxisExtent: 800.0,\n'
         '   │   crossAxisDirection: AxisDirection.right,\n'
-        '   │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 850.0\n'
-        '   │   cacheOrigin: 0.0 )\n'
+        '   │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 850.0,\n'
+        '   │   cacheOrigin: 0.0)\n'
         '   │ geometry: SliverGeometry(scrollExtent: 12000.0, paintExtent:\n'
         '   │   600.0, maxPaintExtent: 12000.0, hasVisualOverflow: true,\n'
         '   │   cacheExtent: 850.0)\n'
