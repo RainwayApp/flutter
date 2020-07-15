@@ -52,7 +52,9 @@ class AotBuilder {
           "To build release for fuchsia, use 'flutter build fuchsia --release'"
         );
         break;
+      // TODO lynn 2020 07: is this right?
       case TargetPlatform.ios:
+      case TargetPlatform.tvos:
         target = buildInfo.isRelease
           ? const AotAssemblyRelease()
           : const AotAssemblyProfile();

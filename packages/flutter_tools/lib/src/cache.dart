@@ -44,6 +44,9 @@ class DevelopmentArtifact {
   /// Artifacts required for iOS development.
   static const DevelopmentArtifact iOS = DevelopmentArtifact._('ios');
 
+  /// Artifacts required for tvOS development.
+  static const DevelopmentArtifact tvOS = DevelopmentArtifact._('tvos');
+
   /// Artifacts required for web development.
   static const DevelopmentArtifact web = DevelopmentArtifact._('web', feature: flutterWebFeature);
 
@@ -74,6 +77,7 @@ class DevelopmentArtifact {
     androidMaven,
     androidInternalBuild,
     iOS,
+    tvOS,
     web,
     macOS,
     windows,
@@ -1099,6 +1103,35 @@ class IOSEngineArtifacts extends EngineCachedArtifact {
   }
 }
 
+class TvOSEngineArtifacts extends EngineCachedArtifact {
+  TvOSEngineArtifacts(Cache cache) : super(
+    'tvos-sdk',
+    cache,
+    DevelopmentArtifact.tvOS,
+  );
+
+  @override
+  List<List<String>> getBinaryDirs() {
+    return <List<String>>[
+      if (globals.platform.isMacOS || cache.includeAllPlatforms)
+        ..._tvosBinaryDirs,
+    ];
+  }
+
+  @override
+  List<String> getLicenseDirs() {
+    if (cache.includeAllPlatforms || globals.platform.isMacOS) {
+      return const <String>['tvos', 'tvos-profile', 'tvos-release'];
+    }
+    return const <String>[];
+  }
+
+  @override
+  List<String> getPackageDirs() {
+    return <String>[];
+  }
+}
+
 /// A cached artifact containing Gradle Wrapper scripts and binaries.
 ///
 /// While this is only required for Android, we need to always download it due
@@ -1483,6 +1516,12 @@ const List<List<String>> _androidBinaryDirs = <List<String>>[
   <String>['android-x64-profile', 'android-x64-profile/artifacts.zip'],
   <String>['android-x64-release', 'android-x64-release/artifacts.zip'],
   <String>['android-x86-jit-release', 'android-x86-jit-release/artifacts.zip'],
+];
+
+const List<List<String>> _tvosBinaryDirs = <List<String>>[
+  <String>['tvos', 'tvos/artifacts.zip'],
+  <String>['tvos-profile', 'tvos-profile/artifacts.zip'],
+  <String>['tvos-release', 'tvos-release/artifacts.zip'],
 ];
 
 const List<List<String>> _dartSdks = <List<String>> [

@@ -236,6 +236,8 @@ class CachedArtifacts implements Artifacts {
         return _getAndroidArtifactPath(artifact, platform, mode);
       case TargetPlatform.ios:
         return _getIosArtifactPath(artifact, platform, mode);
+      case TargetPlatform.tvos:
+        return _getTvosArtifactPath(artifact, platform, mode);
       case TargetPlatform.darwin_x64:
       case TargetPlatform.linux_x64:
       case TargetPlatform.windows_x64:
@@ -330,6 +332,11 @@ class CachedArtifacts implements Artifacts {
       default:
         return _getHostArtifactPath(artifact, platform, mode);
     }
+  }
+
+  String _getTvosArtifactPath(Artifact artifact, TargetPlatform platform, BuildMode mode) {
+    // TODO lynn is this right?
+    return _getIosArtifactPath(artifact, platform, mode);
   }
 
   String _getFlutterPatchedSdkPath(BuildMode mode) {
@@ -451,6 +458,7 @@ class CachedArtifacts implements Artifacts {
         assert(mode == null, 'Platform $platform does not support different build modes.');
         return _fileSystem.path.join(engineDir, platformName);
       case TargetPlatform.ios:
+      case TargetPlatform.tvos:
       case TargetPlatform.android_arm:
       case TargetPlatform.android_arm64:
       case TargetPlatform.android_x64:

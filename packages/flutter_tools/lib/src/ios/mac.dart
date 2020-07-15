@@ -90,12 +90,13 @@ class IMobileDevice {
 }
 
 Future<XcodeBuildResult> buildXcodeProject({
-  BuildableIOSApp app,
+  BuildableIOSLikeApp app,
   BuildInfo buildInfo,
   String targetOverride,
   bool buildForDevice,
   DarwinArch activeArch,
   bool codesign = true,
+  XcodePlatform platform,
   String deviceID,
 }) async {
   if (!upgradePbxProjWithFlutterAssets(app.project, globals.logger)) {
@@ -113,6 +114,18 @@ Future<XcodeBuildResult> buildXcodeProject({
     return XcodeBuildResult(success: false);
   }
 
+  /*
+  final String buildFolder = app.project.buildFolder;
+  final String buildDirectory = app.project.buildDirectory;
+
+  final XcodeProjectInfo projectInfo = await xcodeProjectInterpreter.getInfo(app.project.hostAppRoot.path);
+  if (!projectInfo.targets.contains('Runner')) {
+    globals.printError('The Xcode project does not define target "Runner" which is needed by Flutter tooling.');
+    globals.printError('Open Xcode to fix the problem:');
+    globals.printError('  open $buildFolder/Runner.xcworkspace');
+    return XcodeBuildResult(success: false);
+  }
+  */
   if (!_checkXcodeVersion()) {
     return XcodeBuildResult(success: false);
   }
@@ -120,7 +133,11 @@ Future<XcodeBuildResult> buildXcodeProject({
   await removeFinderExtendedAttributes(app.project.hostAppRoot, processUtils, globals.logger);
 
   final XcodeProjectInfo projectInfo = await app.project.projectInfo();
-  final String scheme = projectInfo.schemeFor(buildInfo);
+  String scheme = projectInfo.schemeFor(buildInfo);
+  if (scheme == 'Runner' && platform == XcodePlatform.tvos) {
+    globals.printStatus('Applying Runner => Runner-tvos scheme name hack.');
+    scheme = 'Runner-tvos';
+  }
   if (scheme == null) {
     projectInfo.reportFlavorNotFoundAndExit();
   }
@@ -130,7 +147,7 @@ Future<XcodeBuildResult> buildXcodeProject({
     globals.printError('The Xcode project defines build configurations: ${projectInfo.buildConfigurations.join(', ')}');
     globals.printError('Flutter expects a build configuration named ${XcodeProjectInfo.expectedBuildConfigurationFor(buildInfo, scheme)} or similar.');
     globals.printError('Open Xcode to fix the problem:');
-    globals.printError('  open ios/Runner.xcworkspace');
+    globals.printError('  open $buildFolder/Runner.xcworkspace');
     globals.printError('1. Click on "Runner" in the project navigator.');
     globals.printError('2. Ensure the Runner PROJECT is selected, not the Runner TARGET.');
     if (buildInfo.isDebug) {
@@ -173,7 +190,7 @@ Future<XcodeBuildResult> buildXcodeProject({
   Map<String, String> autoSigningConfigs;
   if (codesign && buildForDevice) {
     autoSigningConfigs = await getCodeSigningIdentityDevelopmentTeam(
-      iosApp: app,
+      iosLikeApp: app,
       processManager: globals.processManager,
       logger: globals.logger,
       buildInfo: buildInfo,
@@ -181,12 +198,26 @@ Future<XcodeBuildResult> buildXcodeProject({
   }
 
   final FlutterProject project = FlutterProject.current();
+  IosLikeProject subproject;
+  XcodePlatform xcodePlatform;
+  if (app.project is IosProject) {
+    subproject = project.ios;
+    xcodePlatform = XcodePlatform.ios;
+  } else if (app.project is TvosProject) {
+    subproject = project.tvos;
+    xcodePlatform = XcodePlatform.tvos;
+  } else {
+    globals.printError('Unrecognized app project type: ${app.project.runtimeType}');
+    return XcodeBuildResult(success: false);
+  }
+
   await updateGeneratedXcodeProperties(
     project: project,
     targetOverride: targetOverride,
     buildInfo: buildInfo,
+    xcodePlatform: xcodePlatform,
   );
-  await processPodsIfNeeded(project.ios, getIosBuildDirectory(), buildInfo.mode);
+  await processPodsIfNeeded(subproject, subproject.buildDirectory, buildInfo.mode, xcodePlatform);
 
   final List<String> buildCommands = <String>[
     '/usr/bin/env',
@@ -218,7 +249,7 @@ Future<XcodeBuildResult> buildXcodeProject({
       buildCommands.addAll(<String>[
         '-workspace', globals.fs.path.basename(entity.path),
         '-scheme', scheme,
-        'BUILD_DIR=${globals.fs.path.absolute(getIosBuildDirectory())}',
+        'BUILD_DIR=${globals.fs.path.absolute(buildDirectory)}',
       ]);
       break;
     }
@@ -245,9 +276,9 @@ Future<XcodeBuildResult> buildXcodeProject({
     }
   } else {
     if (buildForDevice) {
-      buildCommands.addAll(<String>['-sdk', 'iphoneos']);
+      buildCommands.addAll(<String>['-sdk',  app.project.deviceSdkName]);
     } else {
-      buildCommands.addAll(<String>['-sdk', 'iphonesimulator', '-arch', 'x86_64']);
+      buildCommands.addAll(<String>['-sdk', app.project.simulatorSdkName, '-arch', 'x86_64']);
     }
   }
 
@@ -459,7 +490,7 @@ Future<void> removeFinderExtendedAttributes(Directory iosProjectDirectory, Proce
   }
 }
 
-Future<RunResult> _runBuildWithRetries(List<String> buildCommands, BuildableIOSApp app) async {
+Future<RunResult> _runBuildWithRetries(List<String> buildCommands, BuildableIOSLikeApp app) async {
   int buildRetryDelaySeconds = 1;
   int remainingTries = 8;
 
@@ -618,7 +649,7 @@ bool _checkXcodeVersion() {
 }
 
 // TODO(jmagman): Refactor to IOSMigrator.
-bool upgradePbxProjWithFlutterAssets(IosProject project, Logger logger) {
+bool upgradePbxProjWithFlutterAssets(IosLikeProject project, Logger logger) {
   final File xcodeProjectFile = project.xcodeProjectInfoFile;
   assert(xcodeProjectFile.existsSync());
   final List<String> lines = xcodeProjectFile.readAsLinesSync();

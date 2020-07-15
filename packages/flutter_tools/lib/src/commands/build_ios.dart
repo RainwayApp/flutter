@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 
 import '../application_package.dart';
@@ -67,10 +68,10 @@ class BuildIOSCommand extends BuildSubCommand {
     }
 
     final BuildInfo buildInfo = getBuildInfo();
-    final BuildableIOSApp app = await applicationPackages.getPackageForPlatform(
+    final BuildableIOSLikeApp app = await applicationPackages.getPackageForPlatform(
       TargetPlatform.ios,
       buildInfo,
-    ) as BuildableIOSApp;
+    ) as BuildableIOSLikeApp;
 
     if (app == null) {
       throwToolExit('Application not configured for iOS');
@@ -96,6 +97,7 @@ class BuildIOSCommand extends BuildSubCommand {
       targetOverride: targetFile,
       buildForDevice: !forSimulator,
       codesign: shouldCodesign,
+      platform: XcodePlatform.ios,
     );
 
     if (!result.success) {

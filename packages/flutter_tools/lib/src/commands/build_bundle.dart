@@ -45,6 +45,7 @@ class BuildBundleCommand extends BuildSubCommand {
           'android-x86',
           'android-x64',
           'ios',
+          'tvos',
           'darwin-x64',
           'linux-x64',
           'windows-x64',

@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'package:flutter_tools/src/macos/xcode.dart';
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
 
@@ -18,6 +19,7 @@ import '../base/terminal.dart';
 import '../base/utils.dart';
 import '../build_info.dart';
 import '../cache.dart';
+import '../device.dart';
 import '../flutter_manifest.dart';
 import '../globals.dart' as globals;
 import '../project.dart';
@@ -26,14 +28,95 @@ import '../reporting/reporting.dart';
 final RegExp _settingExpr = RegExp(r'(\w+)\s*=\s*(.*)$');
 final RegExp _varExpr = RegExp(r'\$\(([^)]*)\)');
 
-String flutterFrameworkDir(BuildMode mode) {
-  return globals.fs.path.normalize(globals.fs.path.dirname(globals.artifacts.getArtifactPath(
-      Artifact.flutterFramework, platform: TargetPlatform.ios, mode: mode)));
+enum XcodePlatform {
+  ios,
+  macos,
+  tvos,
 }
 
-String flutterMacOSFrameworkDir(BuildMode mode) {
+TargetPlatform xcodeToTargetPlatform(XcodePlatform xcodePlatform) {
+  switch (xcodePlatform) {
+    case XcodePlatform.ios:
+      return TargetPlatform.ios;
+    case XcodePlatform.macos:
+      return TargetPlatform.darwin_x64;
+    case XcodePlatform.tvos:
+      return TargetPlatform.tvos;
+    default:
+      throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
+  }
+}
+
+/// Turn a [TargetPlatform] into an [XcodePlatform].
+///
+/// Returns null if this is not an Xcode platform.
+XcodePlatform targetToXcodePlatform(TargetPlatform targetPlatform) {
+  switch (targetPlatform) {
+    case TargetPlatform.ios:
+      return XcodePlatform.ios;
+    case TargetPlatform.darwin_x64:
+      return XcodePlatform.macos;
+    case TargetPlatform.tvos:
+      return XcodePlatform.tvos;
+    default:
+      return null;
+  }
+}
+
+Artifact xcodeToFrameworkArtifact(XcodePlatform xcodePlatform) {
+  switch (xcodePlatform) {
+    case XcodePlatform.ios:
+    case XcodePlatform.tvos:
+      return Artifact.flutterFramework;
+    case XcodePlatform.macos:
+      return Artifact.flutterMacOSFramework;
+    default:
+      throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
+  }
+}
+
+PlatformType xcodeToPlatformType(XcodePlatform xcodePlatform) {
+  switch (xcodePlatform) {
+    case XcodePlatform.ios:
+      return PlatformType.ios;
+    case XcodePlatform.macos:
+      return PlatformType.macos;
+    case XcodePlatform.tvos:
+      return PlatformType.tvos;
+    default:
+      throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
+  }
+}
+
+SdkType xcodePlatformToSdkType(XcodePlatform xcodePlatform) {
+  switch (xcodePlatform) {
+    case XcodePlatform.ios:
+      return SdkType.iPhone;
+    case XcodePlatform.macos:
+      return SdkType.macOS;
+    case XcodePlatform.tvos:
+      return SdkType.appleTv;
+    default:
+      throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
+  }
+}
+
+SdkType xcodePlatformToSimulatorSdkType(XcodePlatform xcodePlatform) {
+  switch (xcodePlatform) {
+    case XcodePlatform.ios:
+      return SdkType.iPhoneSimulator;
+    case XcodePlatform.macos:
+      return SdkType.macOS;
+    case XcodePlatform.tvos:
+      return SdkType.appleTvSimulator;
+    default:
+      throw ArgumentError.value(xcodePlatform, 'xcodePlatform');
+  }
+}
+
+String xcodePlatformFrameworkDir(XcodePlatform xcodePlatform, BuildMode mode) {
   return globals.fs.path.normalize(globals.fs.path.dirname(globals.artifacts.getArtifactPath(
-      Artifact.flutterMacOSFramework, platform: TargetPlatform.darwin_x64, mode: mode)));
+      xcodeToFrameworkArtifact(xcodePlatform), platform: xcodeToTargetPlatform(xcodePlatform), mode: mode)));
 }
 
 /// Writes or rewrites Xcode property files with the specified information.
@@ -49,7 +132,7 @@ Future<void> updateGeneratedXcodeProperties({
   @required FlutterProject project,
   @required BuildInfo buildInfo,
   String targetOverride,
-  bool useMacOSConfig = false,
+  XcodePlatform xcodePlatform,
   bool setSymroot = true,
   String buildDirOverride,
 }) async {
@@ -57,7 +140,7 @@ Future<void> updateGeneratedXcodeProperties({
     project: project,
     buildInfo: buildInfo,
     targetOverride: targetOverride,
-    useMacOSConfig: useMacOSConfig,
+    xcodePlatform: xcodePlatform,
     setSymroot: setSymroot,
     buildDirOverride: buildDirOverride,
   );
@@ -65,13 +148,13 @@ Future<void> updateGeneratedXcodeProperties({
   _updateGeneratedXcodePropertiesFile(
     project: project,
     xcodeBuildSettings: xcodeBuildSettings,
-    useMacOSConfig: useMacOSConfig,
+    xcodePlatform: xcodePlatform,
   );
 
   _updateGeneratedEnvironmentVariablesScript(
     project: project,
     xcodeBuildSettings: xcodeBuildSettings,
-    useMacOSConfig: useMacOSConfig,
+    xcodePlatform: xcodePlatform,
   );
 }
 
@@ -81,15 +164,14 @@ Future<void> updateGeneratedXcodeProperties({
 void _updateGeneratedXcodePropertiesFile({
   @required FlutterProject project,
   @required List<String> xcodeBuildSettings,
-  bool useMacOSConfig = false,
+  XcodePlatform xcodePlatform = XcodePlatform.ios,
 }) {
   final StringBuffer localsBuffer = StringBuffer();
 
   localsBuffer.writeln('// This is a generated file; do not edit or check into version control.');
   xcodeBuildSettings.forEach(localsBuffer.writeln);
-  final File generatedXcodePropertiesFile = useMacOSConfig
-    ? project.macos.generatedXcodePropertiesFile
-    : project.ios.generatedXcodePropertiesFile;
+  final File generatedXcodePropertiesFile =
+    project.xcodeSubproject(xcodePlatform).generatedXcodePropertiesFile;
 
   generatedXcodePropertiesFile.createSync(recursive: true);
   generatedXcodePropertiesFile.writeAsStringSync(localsBuffer.toString());
@@ -101,7 +183,7 @@ void _updateGeneratedXcodePropertiesFile({
 void _updateGeneratedEnvironmentVariablesScript({
   @required FlutterProject project,
   @required List<String> xcodeBuildSettings,
-  bool useMacOSConfig = false,
+  XcodePlatform xcodePlatform = XcodePlatform.ios,
 }) {
   final StringBuffer localsBuffer = StringBuffer();
 
@@ -111,9 +193,8 @@ void _updateGeneratedEnvironmentVariablesScript({
     localsBuffer.writeln('export "$line"');
   }
 
-  final File generatedModuleBuildPhaseScript = useMacOSConfig
-    ? project.macos.generatedEnvironmentVariableExportScript
-    : project.ios.generatedEnvironmentVariableExportScript;
+  final File generatedModuleBuildPhaseScript =
+    project.xcodeSubproject(xcodePlatform).generatedEnvironmentVariableExportScript;
   generatedModuleBuildPhaseScript.createSync(recursive: true);
   generatedModuleBuildPhaseScript.writeAsStringSync(localsBuffer.toString());
   globals.os.chmod(generatedModuleBuildPhaseScript, '755');
@@ -157,7 +238,7 @@ List<String> _xcodeBuildSettingsLines({
   @required FlutterProject project,
   @required BuildInfo buildInfo,
   String targetOverride,
-  bool useMacOSConfig = false,
+  XcodePlatform xcodePlatform = XcodePlatform.ios,
   bool setSymroot = true,
   String buildDirOverride,
 }) {
@@ -165,6 +246,9 @@ List<String> _xcodeBuildSettingsLines({
 
   final String flutterRoot = globals.fs.path.normalize(Cache.flutterRoot);
   xcodeBuildSettings.add('FLUTTER_ROOT=$flutterRoot');
+  
+  final String flutterLibDirName = xcodePlatform == XcodePlatform.tvos ? 'Flutter-tvos' : 'Flutter';
+  xcodeBuildSettings.add('FLUTTER_LIB_DIR_NAME=$flutterLibDirName');
 
   // This holds because requiresProjectRoot is true for this command
   xcodeBuildSettings.add('FLUTTER_APPLICATION_PATH=${globals.fs.path.normalize(project.directory.path)}');
@@ -178,7 +262,7 @@ List<String> _xcodeBuildSettingsLines({
   xcodeBuildSettings.add('FLUTTER_BUILD_DIR=${buildDirOverride ?? getBuildDirectory()}');
 
   if (setSymroot) {
-    xcodeBuildSettings.add('SYMROOT=\${SOURCE_ROOT}/../${getIosBuildDirectory()}');
+    xcodeBuildSettings.add('SYMROOT=\${SOURCE_ROOT}/../${(project.xcodeSubproject(xcodePlatform) as IosLikeProject).buildDirectory}');
   }
 
   // iOS does not link on Flutter in any build phase. Add the linker flag.
@@ -191,9 +275,7 @@ List<String> _xcodeBuildSettingsLines({
     // explicitly. Rather we rely on the xcode backend script and the Podfile
     // logic to derive it from FLUTTER_ROOT and FLUTTER_BUILD_MODE.
     // However, this is necessary for regular projects using Cocoapods.
-    final String frameworkDir = useMacOSConfig
-      ? flutterMacOSFrameworkDir(buildInfo.mode)
-      : flutterFrameworkDir(buildInfo.mode);
+    final String frameworkDir = xcodePlatformFrameworkDir(xcodePlatform, buildInfo.mode);
     xcodeBuildSettings.add('FLUTTER_FRAMEWORK_DIR=$frameworkDir');
   }
 
@@ -218,7 +300,7 @@ List<String> _xcodeBuildSettingsLines({
     // paths ending in _arm, 64-bit builds are not.
     //
     // Skip this step for macOS builds.
-    if (!useMacOSConfig) {
+    if (xcodePlatform != XcodePlatform.macos) {
       final String arch = engineOutPath.endsWith('_arm') ? 'armv7' : 'arm64';
       xcodeBuildSettings.add('ARCHS=$arch');
     }

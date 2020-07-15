@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:file/file.dart';
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 
 import '../artifacts.dart';
@@ -191,7 +192,7 @@ class BuildIOSFrameworkCommand extends BuildSubCommand {
       if (boolArg('cocoapods')) {
         // FlutterVersion.instance kicks off git processing which can sometimes fail, so don't try it until needed.
         _flutterVersion ??= globals.flutterVersion;
-        produceFlutterPodspec(buildInfo.mode, modeDirectory, force: boolArg('force'));
+        produceFlutterPodspec(buildInfo.mode, modeDirectory, targetPlatform, force: boolArg('force'));
       } else {
         // Copy Flutter.framework.
         await _produceFlutterFramework(buildInfo, modeDirectory);
@@ -201,7 +202,7 @@ class BuildIOSFrameworkCommand extends BuildSubCommand {
       await _produceAppFramework(buildInfo, modeDirectory);
 
       // Build and copy plugins.
-      await processPodsIfNeeded(_project.ios, getIosBuildDirectory(), buildInfo.mode);
+      await processPodsIfNeeded(_project.ios, getIosBuildDirectory(), buildInfo.mode, XcodePlatform.ios);
       final Directory iPhoneBuildOutput = modeDirectory.childDirectory('iphoneos');
       final Directory simulatorBuildOutput = modeDirectory.childDirectory('iphonesimulator');
       if (hasPlugins(_project)) {
@@ -231,7 +232,7 @@ class BuildIOSFrameworkCommand extends BuildSubCommand {
   /// Create podspec that will download and unzip remote engine assets so host apps can leverage CocoaPods
   /// vendored framework caching.
   @visibleForTesting
-  void produceFlutterPodspec(BuildMode mode, Directory modeDirectory, { bool force = false }) {
+  void produceFlutterPodspec(BuildMode mode, Directory modeDirectory, TargetPlatform targetPlatform, { bool force = false }) {
     final Status status = globals.logger.startProgress(' ├─Creating Flutter.podspec...', timeout: timeoutConfiguration.fastOperation);
     try {
       final GitTagVersion gitTagVersion = _flutterVersion.gitTagVersion;
@@ -252,10 +253,14 @@ class BuildIOSFrameworkCommand extends BuildSubCommand {
       }
       final String licenseSource = license.readAsStringSync();
       final String artifactsMode = mode == BuildMode.debug ? 'ios' : 'ios-${mode.name}';
+      final bool isTvos = targetPlatform == TargetPlatform.tvos;
+      final String podName = isTvos ? 'Flutter-tvos' : 'Flutter';
+      final String podspecPlatform = isTvos ? ":tvos, '9.0'" : ":ios, '8.0'";
+      final String podspecSource = isTvos ? 'nil' : "{ :http => '${_cache.storageBaseUrl}/flutter_infra/flutter/${_cache.engineRevision}/$artifactsMode/artifacts.zip' }";
 
       final String podspecContents = '''
 Pod::Spec.new do |s|
-  s.name                  = 'Flutter'
+  s.name                  = '$podName'
   s.version               = '${gitTagVersion.x}.${gitTagVersion.y}.$minorHotfixVersion' # ${_flutterVersion.frameworkVersion}
   s.summary               = 'Flutter Engine Framework'
   s.description           = <<-DESC
@@ -269,17 +274,17 @@ $licenseSource
 LICENSE
   }
   s.author                = { 'Flutter Dev Team' => 'flutter-dev@googlegroups.com' }
-  s.source                = { :http => '${_cache.storageBaseUrl}/flutter_infra/flutter/${_cache.engineRevision}/$artifactsMode/artifacts.zip' }
+  s.source                = $podspecSource
   s.documentation_url     = 'https://flutter.dev/docs'
-  s.platform              = :ios, '8.0'
-  s.vendored_frameworks   = 'Flutter.framework'
+  s.platform              = $podspecPlatform
+  s.vendored_frameworks = 'Flutter.framework'
   s.prepare_command       = <<-CMD
 unzip Flutter.framework -d Flutter.framework
 CMD
 end
 ''';
 
-      final File podspec = modeDirectory.childFile('Flutter.podspec')..createSync(recursive: true);
+      final File podspec = modeDirectory.childFile('$podName.podspec')..createSync(recursive: true);
       podspec.writeAsStringSync(podspecContents);
     } finally {
       status.stop();

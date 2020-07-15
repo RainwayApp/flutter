@@ -91,6 +91,28 @@ void main() {
 
     }));
 
+    test('set tvOS host language type as usage value', () => testbed.run(() async {
+      final CreateCommand command = CreateCommand();
+      final CommandRunner<void> runner = createTestCommandRunner(command);
+
+      await runner.run(<String>[
+        'create', '--flutter-root=flutter', '--no-pub', '--template=app', 'testy']);
+      expect(await command.usageValues,
+             containsPair(CustomDimensions.commandCreateTvosLanguage, 'swift'));
+
+      await runner.run(<String>[
+        'create',
+        '--flutter-root=flutter',
+        '--no-pub',
+        '--template=app',
+        '--tvos-language=objc',
+        'testy',
+      ]);
+      expect(await command.usageValues,
+             containsPair(CustomDimensions.commandCreateTvosLanguage, 'objc'));
+
+    }));
+
     test('set Android host language type as usage value', () => testbed.run(() async {
       final CreateCommand command = CreateCommand();
       final CommandRunner<void> runner = createTestCommandRunner(command);

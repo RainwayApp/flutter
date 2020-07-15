@@ -26,7 +26,7 @@ void main() {
     ProcessManager mockProcessManager;
     Config mockConfig;
     IosProject mockIosProject;
-    BuildableIOSApp app;
+    BuildableIOSLikeApp app;
     AnsiTerminal testTerminal;
     BufferLogger logger;
 
@@ -44,14 +44,14 @@ void main() {
       });
       testTerminal = TestTerminal();
       testTerminal.usesTerminalUi = true;
-      app = await BuildableIOSApp.fromProject(mockIosProject, null);
+      app = await BuildableIOSLikeApp.fromProject(mockIosProject, null);
     });
 
     testWithoutContext('No auto-sign if Xcode project settings are not available', () async {
       const BuildInfo buildInfo = BuildInfo.debug;
       when(mockIosProject.buildSettingsForBuildInfo(any)).thenReturn(null);
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: buildInfo,
@@ -68,7 +68,7 @@ void main() {
         });
       });
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: buildInfo,
@@ -84,7 +84,7 @@ void main() {
       when(mockProcessManager.run(<String>['which', 'security']))
           .thenAnswer((_) => Future<ProcessResult>.value(exitsFail));
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: null,
@@ -114,7 +114,7 @@ void main() {
       )).thenAnswer((_) => Future<ProcessResult>.value(exitsHappy));
 
       expect(() async => await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: buildInfo,
@@ -180,7 +180,7 @@ void main() {
       when(mockProcess.exitCode).thenAnswer((_) async => 0);
 
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: null,
@@ -249,7 +249,7 @@ void main() {
       Map<String, String> signingConfigs;
       try {
         signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-          iosApp: app,
+          iosLikeApp: app,
           processManager: mockProcessManager,
           logger: logger,
           buildInfo: null,
@@ -324,7 +324,7 @@ void main() {
       when(mockOpenSslProcess.exitCode).thenAnswer((_) => Future<int>.value(0));
 
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: null,
@@ -409,8 +409,9 @@ void main() {
       when(mockOpenSslProcess.stderr).thenAnswer((Invocation invocation) => mockOpenSslStdErr);
       when(mockOpenSslProcess.exitCode).thenAnswer((_) => Future<int>.value(0));
 
+
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: null,
@@ -488,7 +489,7 @@ void main() {
       when<String>(mockConfig.getValue('ios-signing-cert') as String).thenReturn('iPhone Developer: Profile 3 (3333CCCC33)');
 
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: null,
@@ -572,7 +573,7 @@ void main() {
       when<String>(mockConfig.getValue('ios-signing-cert') as String).thenReturn('iPhone Developer: Invalid Profile');
 
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: null,
@@ -614,7 +615,7 @@ void main() {
       ));
 
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: null,
@@ -658,7 +659,7 @@ void main() {
       );
 
       final Map<String, String> signingConfigs = await getCodeSigningIdentityDevelopmentTeam(
-        iosApp: app,
+        iosLikeApp: app,
         processManager: mockProcessManager,
         logger: logger,
         buildInfo: null,

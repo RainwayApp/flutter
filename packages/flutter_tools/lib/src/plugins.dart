@@ -110,6 +110,16 @@ class Plugin {
           IOSPlugin.fromYaml(name, platformsYaml[IOSPlugin.kConfigKey] as YamlMap);
     }
 
+    if (_providesImplementationForPlatform(platformsYaml, TvOSPlugin.kConfigKey)) {
+      platforms[TvOSPlugin.kConfigKey] =
+          TvOSPlugin.fromYaml(name, platformsYaml[TvOSPlugin.kConfigKey] as YamlMap);
+    } else if (_providesImplementationForPlatform(platformsYaml, IOSPlugin.kConfigKey)) {
+      // HACK: We're going to accept iOS plugins as tvOS plugins.
+      globals.logger.printStatus('Applying tvOS plugin hack! $name $path');
+      platforms[TvOSPlugin.kConfigKey] =
+          TvOSPlugin.fromYaml(name, platformsYaml[IOSPlugin.kConfigKey] as YamlMap);
+    }
+
     if (_providesImplementationForPlatform(platformsYaml, LinuxPlugin.kConfigKey)) {
       platforms[LinuxPlugin.kConfigKey] =
           LinuxPlugin.fromYaml(name, platformsYaml[LinuxPlugin.kConfigKey] as YamlMap);
@@ -682,6 +692,9 @@ const String _objcPluginRegistryHeaderTemplate = '''
 
 NS_ASSUME_NONNULL_BEGIN
 
+@interface BlacklistedPlugin : NSObject<FlutterPlugin>
+@end
+
 @interface GeneratedPluginRegistrant : NSObject
 + (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry;
 @end
@@ -697,8 +710,23 @@ const String _objcPluginRegistryImplementationTemplate = '''
 
 #import "GeneratedPluginRegistrant.h"
 
+// TODO: this file is not yet automatically generated (it only exists in Rainway).
+#if TARGET_OS_TV
+#import "tvos_blacklist.h"
+#endif
+
+@implementation BlacklistedPlugin
++ (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
+}
+- (void)handleMethodCall:(FlutterMethodCall*)call result:(FlutterResult)result {
+  result(nil);
+}
+@end
+
 {{#plugins}}
-#if __has_include(<{{name}}/{{class}}.h>)
+#if defined(TVOS_BLACKLIST_{{name}})
+typedef BlacklistedPlugin {{prefix}}{{class}};
+#elif __has_include(<{{name}}/{{class}}.h>)
 #import <{{name}}/{{class}}.h>
 #else
 @import {{name}};
@@ -918,8 +946,48 @@ Future<void> _writeIOSPluginRegistrant(FlutterProject project, List<Plugin> plug
   }
 }
 
+Future<void> _writeTvOSPluginRegistrant(FlutterProject project, List<Plugin> plugins) async {
+  final List<Map<String, dynamic>> tvosPlugins = _extractPlatformMaps(plugins, TvOSPlugin.kConfigKey);
+  final Map<String, dynamic> context = <String, dynamic>{
+    'os': 'tvos',
+    'deploymentTarget': '9.0',
+    'framework': 'Flutter',
+    'plugins': tvosPlugins,
+  };
+  final String registryDirectory = project.tvos.pluginRegistrantHost.path;
+  if (project.isModule) {
+    final String registryClassesDirectory = globals.fs.path.join(registryDirectory, 'Classes');
+    _renderTemplateToFile(
+      _pluginRegistrantPodspecTemplate,
+      context,
+      globals.fs.path.join(registryDirectory, 'FlutterPluginRegistrant.podspec'),
+    );
+    _renderTemplateToFile(
+      _objcPluginRegistryHeaderTemplate,
+      context,
+      globals.fs.path.join(registryClassesDirectory, 'GeneratedPluginRegistrant.h'),
+    );
+    _renderTemplateToFile(
+      _objcPluginRegistryImplementationTemplate,
+      context,
+      globals.fs.path.join(registryClassesDirectory, 'GeneratedPluginRegistrant.m'),
+    );
+  } else {
+    _renderTemplateToFile(
+      _objcPluginRegistryHeaderTemplate,
+      context,
+      globals.fs.path.join(registryDirectory, 'GeneratedPluginRegistrant.h'),
+    );
+    _renderTemplateToFile(
+      _objcPluginRegistryImplementationTemplate,
+      context,
+      globals.fs.path.join(registryDirectory, 'GeneratedPluginRegistrant.m'),
+    );
+  }
+}
+
 Future<void> _writeLinuxPluginFiles(FlutterProject project, List<Plugin> plugins) async {
-  final List<Plugin>nativePlugins = _filterNativePlugins(plugins, LinuxPlugin.kConfigKey);
+  final List<Plugin> nativePlugins = _filterNativePlugins(plugins, LinuxPlugin.kConfigKey);
   final List<Map<String, dynamic>> linuxPlugins = _extractPlatformMaps(nativePlugins, LinuxPlugin.kConfigKey);
   // The generated file is checked in, so can't use absolute paths. It is
   // included by the main CMakeLists.txt, so relative paths must be relative to
@@ -1155,6 +1223,9 @@ Future<void> injectPlugins(FlutterProject project, {bool checkProjects = false})
   if ((checkProjects && project.ios.existsSync()) || !checkProjects) {
     await _writeIOSPluginRegistrant(project, plugins);
   }
+  if ((checkProjects && project.tvos.existsSync()) || !checkProjects) {
+    await _writeTvOSPluginRegistrant(project, plugins);
+  }
   // TODO(stuartmorgan): Revisit the conditions here once the plans for handling
   // desktop in existing projects are in place. For now, ignore checkProjects
   // on desktop and always treat it as true.
@@ -1167,7 +1238,7 @@ Future<void> injectPlugins(FlutterProject project, {bool checkProjects = false})
   if (featureFlags.isWindowsEnabled && project.windows.existsSync()) {
     await _writeWindowsPluginFiles(project, plugins);
   }
-  for (final XcodeBasedProject subproject in <XcodeBasedProject>[project.ios, project.macos]) {
+  for (final XcodeBasedProject subproject in <XcodeBasedProject>[project.ios, project.tvos, project.macos]) {
     if (!project.isModule && (!checkProjects || subproject.existsSync())) {
       if (plugins.isNotEmpty) {
         await globals.cocoaPods.setupPodfile(subproject);

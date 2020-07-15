@@ -14,7 +14,7 @@ class XcodeValidator extends DoctorValidator {
     @required UserMessages userMessages,
   }) : _xcode = xcode,
       _userMessages = userMessages,
-      super('Xcode - develop for iOS and macOS');
+      super('Xcode - develop for iOS, tvOS and macOS');
 
   final Xcode _xcode;
   final UserMessages _userMessages;

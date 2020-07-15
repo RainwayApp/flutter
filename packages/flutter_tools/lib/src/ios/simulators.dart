@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
 
@@ -331,11 +332,11 @@ class IOSSimulator extends Device {
 
   @override
   Future<bool> installApp(
-    covariant IOSApp app, {
+    covariant IOSLikeApp app, {
     String userIdentifier,
   }) async {
     try {
-      final IOSApp iosApp = app;
+      final IOSLikeApp iosApp = app;
       await _simControl.install(id, iosApp.simulatorBundlePath);
       return true;
     } on Exception {
@@ -386,7 +387,7 @@ class IOSSimulator extends Device {
 
   @override
   Future<LaunchResult> startApp(
-    covariant IOSApp package, {
+    covariant IOSLikeApp package, {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
@@ -395,7 +396,7 @@ class IOSSimulator extends Device {
     bool ipv6 = false,
     String userIdentifier,
   }) async {
-    if (!prebuiltApplication && package is BuildableIOSApp) {
+    if (!prebuiltApplication && package is BuildableIOSLikeApp) {
       globals.printTrace('Building ${package.name} for $id.');
 
       try {
@@ -477,7 +478,7 @@ class IOSSimulator extends Device {
     return LaunchResult.failed();
   }
 
-  Future<void> _setupUpdatedApplicationBundle(covariant BuildableIOSApp app, BuildInfo buildInfo, String mainPath) async {
+  Future<void> _setupUpdatedApplicationBundle(covariant BuildableLikeIOSApp app, BuildInfo buildInfo, String mainPath) async {
     // Step 1: Build the Xcode project.
     // The build mode for the simulator is always debug.
     assert(buildInfo.isDebug);
@@ -487,6 +488,7 @@ class IOSSimulator extends Device {
       buildInfo: buildInfo,
       targetOverride: mainPath,
       buildForDevice: false,
+      platform: XcodePlatform.ios,
       deviceID: id,
     );
     if (!buildResult.success) {
@@ -541,10 +543,10 @@ class IOSSimulator extends Device {
 
   @override
   DeviceLogReader getLogReader({
-    covariant IOSApp app,
+    covariant IOSLikeApp app,
     bool includePastLogs = false,
   }) {
-    assert(app == null || app is IOSApp);
+    assert(app == null || app is IOSLikeApp);
     assert(!includePastLogs, 'Past log reading not supported on iOS simulators.');
     _logReaders ??= <ApplicationPackage, _IOSSimulatorLogReader>{};
     return _logReaders.putIfAbsent(app, () => _IOSSimulatorLogReader(this, app));
@@ -646,7 +648,7 @@ Future<Process> launchSystemLogTool(IOSSimulator device) async {
 }
 
 class _IOSSimulatorLogReader extends DeviceLogReader {
-  _IOSSimulatorLogReader(this.device, IOSApp app) {
+  _IOSSimulatorLogReader(this.device, IOSLikeApp app) {
     _linesController = StreamController<String>.broadcast(
       onListen: _start,
       onCancel: _stop,

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:async';
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
 
@@ -119,9 +120,10 @@ class AOTSnapshotter {
     @required bool dartObfuscation,
     bool quiet = false,
   }) async {
+    final bool isIosOrTvos = platform == TargetPlatform.ios || platform == TargetPlatform.tvos;
     // TODO(cbracken): replace IOSArch with TargetPlatform.ios_{armv7,arm64}.
     assert(platform != TargetPlatform.ios || darwinArch != null);
-    if (bitcode && platform != TargetPlatform.ios) {
+    if (bitcode && !isIosOrTvos) {
       _logger.printError('Bitcode is only supported for iOS.');
       return 1;
     }
@@ -143,7 +145,7 @@ class AOTSnapshotter {
     }
 
     final String assembly = _fileSystem.path.join(outputDir.path, 'snapshot_assembly.S');
-    if (platform == TargetPlatform.ios || platform == TargetPlatform.darwin_x64) {
+    if (isIosOrTvos || platform == TargetPlatform.darwin_x64) {
       genSnapshotArgs.addAll(<String>[
         '--snapshot_kind=app-aot-assembly',
         '--assembly=$assembly',
@@ -205,12 +207,13 @@ class AOTSnapshotter {
       return genSnapshotExitCode;
     }
 
-    // On iOS and macOS, we use Xcode to compile the snapshot into a dynamic library that the
+    // On iOS, tvOS, and macOS, we use Xcode to compile the snapshot into a dynamic library that the
     // end-developer can link into their app.
-    if (platform == TargetPlatform.ios || platform == TargetPlatform.darwin_x64) {
+    final XcodePlatform xcodePlatform = targetToXcodePlatform(platform);
+    if (xcodePlatform != null) {
       final RunResult result = await _buildFramework(
         appleArch: darwinArch,
-        isIOS: platform == TargetPlatform.ios,
+        xcodePlatform: xcodePlatform,
         assemblyPath: assembly,
         outputPath: outputDir.path,
         bitcode: bitcode,
@@ -227,7 +230,7 @@ class AOTSnapshotter {
   /// source at [assemblyPath].
   Future<RunResult> _buildFramework({
     @required DarwinArch appleArch,
-    @required bool isIOS,
+    @required XcodePlatform xcodePlatform,
     @required String assemblyPath,
     @required String outputPath,
     @required bool bitcode,
@@ -238,19 +241,23 @@ class AOTSnapshotter {
       _logger.printStatus('Building App.framework for $targetArch...');
     }
 
+    final bool isIos = xcodePlatform == XcodePlatform.ios;
+    final bool isTvos = xcodePlatform == XcodePlatform.tvos;
+
     final List<String> commonBuildOptions = <String>[
       '-arch', targetArch,
-      if (isIOS)
-        '-miphoneos-version-min=8.0',
+      if (isIos) '-miphoneos-version-min=8.0',
+      if (isTvos) '-mappletvos-version-min=9.0',
     ];
 
     const String embedBitcodeArg = '-fembed-bitcode';
     final String assemblyO = _fileSystem.path.join(outputPath, 'snapshot_assembly.o');
     List<String> isysrootArgs;
-    if (isIOS) {
-      final String iPhoneSDKLocation = await _xcode.sdkLocation(SdkType.iPhone);
-      if (iPhoneSDKLocation != null) {
-        isysrootArgs = <String>['-isysroot', iPhoneSDKLocation];
+    if (isIos || isTvos) {
+      final SdkType sdk = xcodePlatformToSdkType(xcodePlatform);
+      final String sdkLocation = await xcode.sdkLocation(sdk);
+      if (sdkLocation != null) {
+        isysrootArgs = <String>['-isysroot', sdkLocation];
       }
     }
     final RunResult compileResult = await _xcode.cc(<String>[
@@ -297,6 +304,7 @@ class AOTSnapshotter {
       TargetPlatform.android_arm64,
       TargetPlatform.android_x64,
       TargetPlatform.ios,
+      TargetPlatform.tvos,
       TargetPlatform.darwin_x64,
       TargetPlatform.linux_x64,
       TargetPlatform.windows_x64,

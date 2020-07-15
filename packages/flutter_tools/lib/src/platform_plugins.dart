@@ -201,6 +201,52 @@ class IOSPlugin extends PluginPlatform {
   }
 }
 
+/// Contains the parameters to template an iOS plugin.
+///
+/// The required fields include: [name] of the plugin, the [pluginClass] that
+/// will be the entry point to the plugin's native code.
+class TvOSPlugin extends PluginPlatform {
+  const TvOSPlugin({
+    @required this.name,
+    this.classPrefix,
+    @required this.pluginClass,
+  });
+
+  factory TvOSPlugin.fromYaml(String name, YamlMap yaml) {
+    assert(validate(yaml));
+    return TvOSPlugin(
+      name: name,
+      classPrefix: '',
+      pluginClass: yaml['pluginClass'] as String,
+    );
+  }
+
+  static bool validate(YamlMap yaml) {
+    if (yaml == null) {
+      return false;
+    }
+    return yaml['pluginClass'] is String;
+  }
+
+  static const String kConfigKey = 'ios';
+
+  final String name;
+
+  /// Note, this is here only for legacy reasons. Multi-platform format
+  /// always sets it to empty String.
+  final String classPrefix;
+  final String pluginClass;
+
+  @override
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'name': name,
+      'prefix': classPrefix,
+      'class': pluginClass,
+    };
+  }
+}
+
 /// Contains the parameters to template a macOS plugin.
 ///
 /// The [name] of the plugin is required. Either [dartPluginClass] or [pluginClass] are required.

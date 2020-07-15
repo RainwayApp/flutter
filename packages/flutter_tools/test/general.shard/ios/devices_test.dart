@@ -203,8 +203,8 @@ void main() {
 
     group('.dispose()', () {
       IOSDevice device;
-      MockIOSApp appPackage1;
-      MockIOSApp appPackage2;
+      MockIOSLikeApp appPackage1;
+      MockIOSLikeApp appPackage2;
       IOSDeviceLogReader logReader1;
       IOSDeviceLogReader logReader2;
       MockProcess mockProcess1;
@@ -240,7 +240,7 @@ void main() {
 
       IOSDeviceLogReader createLogReader(
           IOSDevice device,
-          IOSApp appPackage,
+          IOSLikeApp appPackage,
           Process process) {
         final IOSDeviceLogReader logReader = IOSDeviceLogReader.create(
           device: device,
@@ -252,8 +252,8 @@ void main() {
       }
 
       setUp(() {
-        appPackage1 = MockIOSApp();
-        appPackage2 = MockIOSApp();
+        appPackage1 = MockIOSLikeApp();
+        appPackage2 = MockIOSLikeApp();
         when(appPackage1.name).thenReturn('flutterApp1');
         when(appPackage2.name).thenReturn('flutterApp2');
         mockProcess1 = MockProcess();
@@ -602,7 +602,8 @@ void main() {
   });
 }
 
-class MockIOSApp extends Mock implements IOSApp {}
+// TODO lynn 2020 07
+class MockIOSLikeApp extends Mock implements IOSLikeApp {}
 class MockArtifacts extends Mock implements Artifacts {}
 class MockCache extends Mock implements Cache {}
 class MockIMobileDevice extends Mock implements IMobileDevice {}

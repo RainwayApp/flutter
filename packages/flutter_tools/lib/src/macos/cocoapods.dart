@@ -295,10 +295,11 @@ class CocoaPods {
   }
 
   void _addPodsDependencyToFlutterXcconfig(XcodeBasedProject xcodeProject, String mode) {
+    final String runner = xcodeProject.runnerTargetName;
     final File file = xcodeProject.xcodeConfigFor(mode);
     if (file.existsSync()) {
       final String content = file.readAsStringSync();
-      final String include = '#include "Pods/Target Support Files/Pods-Runner/Pods-Runner.${mode
+      final String include = '#include "Pods/Target Support Files/Pods-$runner/Pods-$runner.${mode
           .toLowerCase()}.xcconfig"';
       if (!content.contains(include)) {
         file.writeAsStringSync('$include\n$content', flush: true);
@@ -381,7 +382,7 @@ class CocoaPods {
   }
 
   void _warnIfPodfileOutOfDate(XcodeBasedProject xcodeProject) {
-    if (xcodeProject is! IosProject) {
+    if (xcodeProject is! IosLikeProject) {
       return;
     }
 

@@ -25,7 +25,7 @@ class BuildAotCommand extends BuildSubCommand with TargetPlatformBasedDevelopmen
       ..addOption('output-dir', defaultsTo: getAotBuildDirectory())
       ..addOption('target-platform',
         defaultsTo: 'android-arm',
-        allowed: <String>['android-arm', 'android-arm64', 'ios', 'android-x64'],
+        allowed: <String>['android-arm', 'android-arm64', 'ios', 'tvos', 'android-x64'],
       )
       ..addFlag('quiet', defaultsTo: false)
       ..addMultiOption('ios-arch',

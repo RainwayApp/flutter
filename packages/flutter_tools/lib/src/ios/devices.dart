@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
 import 'package:vm_service/vm_service.dart' as vm_service;
@@ -30,6 +31,8 @@ import 'fallback_discovery.dart';
 import 'ios_deploy.dart';
 import 'ios_workflow.dart';
 import 'mac.dart';
+
+// TODO lynn 2020 07: re-tvos-ify this whole file.
 
 class IOSDevices extends PollingDeviceDiscovery {
   // TODO(fujino): make these required and remove fallbacks once internal invocations migrated
@@ -165,7 +168,7 @@ class IOSDevice extends Device {
         super(
           id,
           category: Category.mobile,
-          platformType: PlatformType.ios,
+          platformType: xcodeToPlatformType(platform),
           ephemeral: true,
       ) {
     if (!platform.isMacOS) {
@@ -245,7 +248,7 @@ class IOSDevice extends Device {
   }
 
   @override
-  Future<bool> isLatestBuildInstalled(IOSApp app) async => false;
+  Future<bool> isLatestBuildInstalled(IOSLikeApp app) async => false;
 
   @override
   Future<bool> installApp(
@@ -307,7 +310,7 @@ class IOSDevice extends Device {
 
   @override
   Future<LaunchResult> startApp(
-    IOSApp package, {
+    IOSLikeApp package, {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
@@ -325,7 +328,7 @@ class IOSDevice extends Device {
 
       // Step 1: Build the precompiled/DBC application if necessary.
       final XcodeBuildResult buildResult = await buildXcodeProject(
-          app: package as BuildableIOSApp,
+          app: package as BuildableIOSLikeApp,
           buildInfo: debuggingOptions.buildInfo,
           targetOverride: mainPath,
           buildForDevice: true,
@@ -465,10 +468,10 @@ class IOSDevice extends Device {
   }
 
   @override
-  Future<TargetPlatform> get targetPlatform async => TargetPlatform.ios;
+  Future<TargetPlatform> get targetPlatform async => xcodeToTargetPlatform(platform);
 
   @override
-  Future<String> get sdkNameAndVersion async => 'iOS $_sdkVersion';
+  Future<String> get sdkNameAndVersion async => '$platform $_sdkVersion';
 
   @override
   DeviceLogReader getLogReader({
@@ -485,8 +488,8 @@ class IOSDevice extends Device {
   }
 
   @visibleForTesting
-  void setLogReader(IOSApp app, DeviceLogReader logReader) {
-    _logReaders ??= <IOSApp, DeviceLogReader>{};
+  void setLogReader(IOSLikeApp app, DeviceLogReader logReader) {
+    _logReaders ??= <IOSLikeApp, DeviceLogReader>{};
     _logReaders[app] = logReader;
   }
 
@@ -518,7 +521,7 @@ class IOSDevice extends Device {
 
   @override
   bool isSupportedForProject(FlutterProject flutterProject) {
-    return flutterProject.ios.existsSync();
+    return flutterProject.xcodeSubproject(platform).existsSync();
   }
 
   @override

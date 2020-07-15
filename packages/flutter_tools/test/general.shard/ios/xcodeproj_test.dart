@@ -610,6 +610,7 @@ Information about project "Runner":
       const BuildInfo buildInfo = BuildInfo(BuildMode.debug, null, treeShakeIcons: false);
       final FlutterProject project = FlutterProject.fromPath('path/to/project');
       await updateGeneratedXcodeProperties(
+        xcodePlatform: XcodePlatform.ios,
         project: project,
         buildInfo: buildInfo,
       );
@@ -634,6 +635,7 @@ Information about project "Runner":
       const BuildInfo buildInfo = BuildInfo(BuildMode.debug, null, trackWidgetCreation: true, treeShakeIcons: false);
       final FlutterProject project = FlutterProject.fromPath('path/to/project');
       await updateGeneratedXcodeProperties(
+        xcodePlatform: XcodePlatform.ios,
         project: project,
         buildInfo: buildInfo,
       );
@@ -658,6 +660,7 @@ Information about project "Runner":
       const BuildInfo buildInfo = BuildInfo(BuildMode.debug, null, treeShakeIcons: false);
       final FlutterProject project = FlutterProject.fromPath('path/to/project');
       await updateGeneratedXcodeProperties(
+        xcodePlatform: XcodePlatform.ios,
         project: project,
         buildInfo: buildInfo,
       );
@@ -683,6 +686,7 @@ Information about project "Runner":
 
       final FlutterProject project = FlutterProject.fromPath('path/to/project');
       await updateGeneratedXcodeProperties(
+        xcodePlatform: XcodePlatform.ios,
         project: project,
         buildInfo: buildInfo,
       );
@@ -721,6 +725,7 @@ Information about project "Runner":
       writeEmptySchemaFile(fs);
 
       await updateGeneratedXcodeProperties(
+        xcodePlatform: XcodePlatform.ios,
         project: FlutterProject.fromPath('path/to/project'),
         buildInfo: buildInfo,
       );

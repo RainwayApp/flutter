@@ -37,10 +37,10 @@ Future<void> buildMacOS({
     project: flutterProject,
     buildInfo: buildInfo,
     targetOverride: targetOverride,
-    useMacOSConfig: true,
+    xcodePlatform: XcodePlatform.macos,
     setSymroot: false,
   );
-  await processPodsIfNeeded(flutterProject.macos, getMacOSBuildDirectory(), buildInfo.mode);
+  await processPodsIfNeeded(flutterProject.macos, getMacOSBuildDirectory(), buildInfo.mode, XcodePlatform.macos);
   // If the xcfilelists do not exist, create empty version.
   if (!flutterProject.macos.inputFileList.existsSync()) {
     flutterProject.macos.inputFileList.createSync(recursive: true);
