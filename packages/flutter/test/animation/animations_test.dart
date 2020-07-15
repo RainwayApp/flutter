@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -249,8 +251,8 @@ void main() {
       // RegExp matcher is required here due to flutter web and flutter mobile generating
       // slightly different floating point numbers
       // in Flutter web 0.0 sometimes just appears as 0. or 0
-      RegExp(
-        r'''FlutterError
+      RegExp(r'''
+FlutterError
    Invalid curve endpoint at \d+(\.\d*)?\.
    Curves must map 0\.0 to near zero and 1\.0 to near one but
    BogusCurve mapped \d+(\.\d*)? to \d+(\.\d*)?, which is near \d+(\.\d*)?\.

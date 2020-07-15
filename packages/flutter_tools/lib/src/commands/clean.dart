@@ -11,14 +11,17 @@ import '../base/logger.dart';
 import '../build_info.dart';
 import '../globals.dart' as globals;
 import '../ios/xcodeproj.dart';
-import '../macos/xcode.dart';
 import '../project.dart';
 import '../runner/flutter_command.dart';
 
 class CleanCommand extends FlutterCommand {
-  CleanCommand() {
+  CleanCommand({
+    bool verbose = false,
+  }) : _verbose = verbose {
     requiresPubspecYaml();
   }
+
+  final bool _verbose;
 
   @override
   final String name = 'clean';
@@ -34,7 +37,7 @@ class CleanCommand extends FlutterCommand {
     // Clean Xcode to remove intermediate DerivedData artifacts.
     // Do this before removing ephemeral directory, which would delete the xcworkspace.
     final FlutterProject flutterProject = FlutterProject.current();
-    if (xcode.isInstalledAndMeetsVersionCheck) {
+    if (globals.xcode.isInstalledAndMeetsVersionCheck) {
       await _cleanXcode(flutterProject.ios);
       await _cleanXcode(flutterProject.macos);
     }
@@ -44,20 +47,16 @@ class CleanCommand extends FlutterCommand {
 
     deleteFile(flutterProject.dartTool);
 
-    final Directory androidEphemeralDirectory = flutterProject.android.ephemeralDirectory;
-    deleteFile(androidEphemeralDirectory);
+    deleteFile(flutterProject.android.ephemeralDirectory);
 
-    final Directory iosEphemeralDirectory = flutterProject.ios.ephemeralDirectory;
-    deleteFile(iosEphemeralDirectory);
+    deleteFile(flutterProject.ios.ephemeralDirectory);
+    deleteFile(flutterProject.ios.generatedXcodePropertiesFile);
+    deleteFile(flutterProject.ios.generatedEnvironmentVariableExportScript);
+    deleteFile(flutterProject.ios.compiledDartFramework);
 
-    final Directory linuxEphemeralDirectory = flutterProject.linux.ephemeralDirectory;
-    deleteFile(linuxEphemeralDirectory);
-
-    final Directory macosEphemeralDirectory = flutterProject.macos.ephemeralDirectory;
-    deleteFile(macosEphemeralDirectory);
-
-    final Directory windowsEphemeralDirectory = flutterProject.windows.ephemeralDirectory;
-    deleteFile(windowsEphemeralDirectory);
+    deleteFile(flutterProject.linux.ephemeralDirectory);
+    deleteFile(flutterProject.macos.ephemeralDirectory);
+    deleteFile(flutterProject.windows.ephemeralDirectory);
 
     return const FlutterCommandResult(ExitStatus.success);
   }
@@ -72,11 +71,11 @@ class CleanCommand extends FlutterCommand {
     );
     try {
       final Directory xcodeWorkspace = xcodeProject.xcodeWorkspace;
-      final XcodeProjectInfo projectInfo = await xcodeProjectInterpreter.getInfo(xcodeWorkspace.parent.path);
+      final XcodeProjectInfo projectInfo = await globals.xcodeProjectInterpreter.getInfo(xcodeWorkspace.parent.path);
       for (final String scheme in projectInfo.schemes) {
-        xcodeProjectInterpreter.cleanWorkspace(xcodeWorkspace.path, scheme);
+        await globals.xcodeProjectInterpreter.cleanWorkspace(xcodeWorkspace.path, scheme, verbose: _verbose);
       }
-    } catch (error) {
+    } on Exception catch (error) {
       globals.printTrace('Could not clean Xcode workspace: $error');
     } finally {
       xcodeStatus?.stop();

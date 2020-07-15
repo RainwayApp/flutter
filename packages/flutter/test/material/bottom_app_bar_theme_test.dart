@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,7 +84,7 @@ void main() {
       find.byKey(_painterKey),
       matchesGoldenFile('bottom_app_bar_theme.custom_shape.png'),
     );
-  }, skip: isBrowser);
+  });
 
   testWidgets('BAB theme does not affect defaults', (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(

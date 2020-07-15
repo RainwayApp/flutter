@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -13,6 +15,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'widget_inspector_test_utils.dart';
 
 // Start of block of code where widget creation location line numbers and
 // columns will impact whether tests pass.
@@ -117,7 +121,7 @@ class CyclicDiagnostic extends DiagnosticableTree {
   // We have to override toString to avoid the toString call itself triggering a
   // stack overflow.
   @override
-  String toString({ DiagnosticLevel minLevel = DiagnosticLevel.debug }) {
+  String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
     return toStringShort();
   }
 
@@ -222,64 +226,10 @@ int getChildLayerCount(OffsetLayer layer) {
 }
 
 void main() {
-  TestWidgetInspectorService.runTests();
+  _TestWidgetInspectorService.runTests();
 }
 
-class TestWidgetInspectorService extends Object with WidgetInspectorService {
-  final Map<String, InspectorServiceExtensionCallback> extensions = <String, InspectorServiceExtensionCallback>{};
-
-  final Map<String, List<Map<Object, Object>>> eventsDispatched = <String, List<Map<Object, Object>>>{};
-
-  @override
-  void registerServiceExtension({
-    @required String name,
-    @required FutureOr<Map<String, Object>> callback(Map<String, String> parameters),
-  }) {
-    assert(!extensions.containsKey(name));
-    extensions[name] = callback;
-  }
-
-  @override
-  void postEvent(String eventKind, Map<Object, Object> eventData) {
-    getEventsDispatched(eventKind).add(eventData);
-  }
-
-  List<Map<Object, Object>> getEventsDispatched(String eventKind) {
-    return eventsDispatched.putIfAbsent(eventKind, () => <Map<Object, Object>>[]);
-  }
-
-  Iterable<Map<Object, Object>> getServiceExtensionStateChangedEvents(String extensionName) {
-    return getEventsDispatched('Flutter.ServiceExtensionStateChanged')
-      .where((Map<Object, Object> event) => event['extension'] == extensionName);
-  }
-
-  Future<Object> testExtension(String name, Map<String, String> arguments) async {
-    expect(extensions, contains(name));
-    // Encode and decode to JSON to match behavior using a real service
-    // extension where only JSON is allowed.
-    return json.decode(json.encode(await extensions[name](arguments)))['result'];
-  }
-
-  Future<String> testBoolExtension(String name, Map<String, String> arguments) async {
-    expect(extensions, contains(name));
-    // Encode and decode to JSON to match behavior using a real service
-    // extension where only JSON is allowed.
-    return json.decode(json.encode(await extensions[name](arguments)))['enabled'] as String;
-  }
-
-  int rebuildCount = 0;
-
-  @override
-  Future<void> forceRebuild() async {
-    rebuildCount++;
-    final WidgetsBinding binding = WidgetsBinding.instance;
-
-    if (binding.renderViewElement != null) {
-      binding.buildOwner.reassemble(binding.renderViewElement);
-    }
-  }
-
-
+class _TestWidgetInspectorService extends TestWidgetInspectorService {
   // These tests need access to protected members of WidgetInspectorService.
   static void runTests() {
     final TestWidgetInspectorService service = TestWidgetInspectorService();
@@ -1725,7 +1675,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
       _CreationLocation location = knownLocations[id];
       expect(location.file, equals(file));
       // ClockText widget.
-      expect(location.line, equals(51));
+      expect(location.line, equals(55));
       expect(location.column, equals(9));
       expect(count, equals(1));
 
@@ -1734,7 +1684,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
       location = knownLocations[id];
       expect(location.file, equals(file));
       // Text widget in _ClockTextState build method.
-      expect(location.line, equals(89));
+      expect(location.line, equals(93));
       expect(location.column, equals(12));
       expect(count, equals(1));
 
@@ -1759,7 +1709,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
       location = knownLocations[id];
       expect(location.file, equals(file));
       // ClockText widget.
-      expect(location.line, equals(51));
+      expect(location.line, equals(55));
       expect(location.column, equals(9));
       expect(count, equals(3)); // 3 clock widget instances rebuilt.
 
@@ -1768,7 +1718,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
       location = knownLocations[id];
       expect(location.file, equals(file));
       // Text widget in _ClockTextState build method.
-      expect(location.line, equals(89));
+      expect(location.line, equals(93));
       expect(location.column, equals(12));
       expect(count, equals(3)); // 3 clock widget instances rebuilt.
 
@@ -1919,7 +1869,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
       // No new locations were rebuilt.
       expect(event, isNot(contains('newLocations')));
 
-      // Triggering a a rebuild of one widget in this app causes the whole app
+      // Triggering a rebuild of one widget in this app causes the whole app
       // to repaint.
       expect(data.length, equals(18));
 
@@ -1934,7 +1884,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
 
       state.updateTime(); // Triggers a rebuild.
       await tester.pump();
-      // Verify that rapint events are not fired once the extension is disabled.
+      // Verify that repaint events are not fired once the extension is disabled.
       expect(repaintEvents, isEmpty);
     }, skip: !WidgetInspectorService.instance.isWidgetCreationTracked()); // Test requires --track-widget-creation flag.
 
@@ -2274,13 +2224,13 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
         ),
         matchesGoldenFile('inspector.sizedBox_debugPaint_margin.png'),
       );
-    }, skip: isBrowser);
+    });
 
-    testWidgets('ext.flutter.inspector.structuredErrors', (WidgetTester tester) async {
+    test('ext.flutter.inspector.structuredErrors', () async {
       List<Map<Object, Object>> flutterErrorEvents = service.getEventsDispatched('Flutter.Error');
       expect(flutterErrorEvents, isEmpty);
 
-      final FlutterExceptionHandler oldHandler = FlutterError.onError;
+      final FlutterExceptionHandler oldHandler = FlutterError.presentError;
 
       try {
         // Enable structured errors.
@@ -2306,6 +2256,10 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
 
         // Validate that we received an error count.
         expect(error['errorsSinceReload'], 0);
+        expect(
+            error['renderedErrorText'],
+            startsWith(
+                '══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞════════════'));
 
         // Send a second error.
         FlutterError.reportError(FlutterErrorDetailsForRendering(
@@ -2319,10 +2273,21 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
         expect(flutterErrorEvents, hasLength(2));
         error = flutterErrorEvents.last;
         expect(error['errorsSinceReload'], 1);
+        expect(error['renderedErrorText'], startsWith('Another exception was thrown:'));
 
-        // Reload the app.
-        tester.binding.reassembleApplication();
-        await tester.pump();
+        // Reloads the app.
+        final FlutterExceptionHandler oldHandler = FlutterError.onError;
+        final TestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.ensureInitialized() as TestWidgetsFlutterBinding;
+        // We need the runTest to setup the fake async in the test binding.
+        await binding.runTest(() async {
+          binding.reassembleApplication();
+          await binding.pump();
+        }, () { });
+        // The run test overrides the flutter error handler, so we should
+        // restore it back for the structure error to continue working.
+        FlutterError.onError = oldHandler;
+        // Cleans up the fake async so it does not bleed into next test.
+        binding.postTest();
 
         // Send another error.
         FlutterError.reportError(FlutterErrorDetailsForRendering(
@@ -2337,7 +2302,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
         error = flutterErrorEvents.last;
         expect(error['errorsSinceReload'], 0);
       } finally {
-        FlutterError.onError = oldHandler;
+        FlutterError.presentError = oldHandler;
       }
     });
 
@@ -2433,7 +2398,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
         ),
         matchesGoldenFile('inspector.composited_transform.only_offsets_target.png'),
       );
-    }, skip: isBrowser);
+    });
 
     testWidgets('Screenshot composited transforms - with rotations', (WidgetTester tester) async {
       final LayerLink link = LayerLink();
@@ -2539,7 +2504,7 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
       expect(identical(key2.currentContext.findRenderObject(), box2), isTrue);
       expect(box1.localToGlobal(Offset.zero), equals(position1));
       expect(box2.localToGlobal(Offset.zero), equals(position2));
-    }, skip: isBrowser);
+    });
 
     testWidgets('getChildrenDetailsSubtree', (WidgetTester tester) async {
       await tester.pumpWidget(

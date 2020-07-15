@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
@@ -19,7 +21,7 @@ import 'theme.dart';
 /// a border radius of 2.0 on all corners.
 ///
 /// [titleTextStyle] and [contentTextStyle] are used in [AlertDialog]s.
-/// If null, they default to [TextTheme.title] and [TextTheme.subhead],
+/// If null, they default to [TextTheme.headline6] and [TextTheme.subtitle1],
 /// respectively.
 ///
 /// See also:
@@ -27,7 +29,8 @@ import 'theme.dart';
 ///  * [Dialog], a material dialog that can be customized using this [DialogTheme].
 ///  * [ThemeData], which describes the overall theme information for the
 ///    application.
-class DialogTheme extends Diagnosticable {
+@immutable
+class DialogTheme with Diagnosticable {
   /// Creates a dialog theme that can be used for [ThemeData.dialogTheme].
   const DialogTheme({
     this.backgroundColor,
@@ -53,12 +56,12 @@ class DialogTheme extends Diagnosticable {
 
   /// Used to configure the [DefaultTextStyle] for the [AlertDialog.title] widget.
   ///
-  /// If null, defaults to [ThemeData.textTheme.title].
+  /// If null, defaults to [ThemeData.textTheme.headline6].
   final TextStyle titleTextStyle;
 
   /// Used to configure the [DefaultTextStyle] for the [AlertDialog.content] widget.
   ///
-  /// If null, defaults to [ThemeData.textTheme.subhead].
+  /// If null, defaults to [ThemeData.textTheme.subtitle1].
   final TextStyle contentTextStyle;
 
   /// Creates a copy of this object but with the given fields replaced with the

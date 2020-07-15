@@ -11,7 +11,7 @@ import 'package:flutter_devicelab/framework/utils.dart';
 
 final List<String> flutterAssets = <String>[
   'assets/flutter_assets/AssetManifest.json',
-  'assets/flutter_assets/LICENSE',
+  'assets/flutter_assets/NOTICES',
   'assets/flutter_assets/fonts/MaterialIcons-Regular.ttf',
   'assets/flutter_assets/packages/cupertino_icons/assets/CupertinoIcons.ttf',
 ];
@@ -46,6 +46,18 @@ Future<void> runPluginProjectTest(Future<void> testFunction(FlutterPluginProject
 
   try {
     await testFunction(pluginProject);
+  } finally {
+    rmTree(tempDir);
+  }
+}
+
+/// Runs the given [testFunction] on a freshly generated Flutter module project.
+Future<void> runModuleProjectTest(Future<void> testFunction(FlutterModuleProject moduleProject)) async {
+  final Directory tempDir = Directory.systemTemp.createTempSync('flutter_devicelab_gradle_module_test.');
+  final FlutterModuleProject moduleProject = await FlutterModuleProject.create(tempDir, 'hello_module');
+
+  try {
+    await testFunction(moduleProject);
   } finally {
     rmTree(tempDir);
   }
@@ -93,7 +105,7 @@ String get _androidHome {
   final String androidHome = Platform.environment['ANDROID_HOME'] ??
       Platform.environment['ANDROID_SDK_ROOT'];
   if (androidHome == null || androidHome.isEmpty) {
-    throw Exception('Unset env flag: `ANDROID_HOME` or `ANDROID_SDK_ROOT`.');
+    throw Exception('Environment variable `ANDROID_SDK_ROOT` is not set.');
   }
   return androidHome;
 }
@@ -193,7 +205,7 @@ Future<void> checkApkContainsClasses(File apk, List<String> classes) async {
   final ApkExtractor extractor = ApkExtractor(apk);
   for (final String className in classes) {
     if (!(await extractor.containsClass(className))) {
-      throw Exception('APK doesn\'t contain class `$className`.');
+      throw Exception("APK doesn't contain class `$className`.");
     }
   }
   extractor.dispose();
@@ -214,6 +226,7 @@ class FlutterProject {
 
   String get rootPath => path.join(parent.path, name);
   String get androidPath => path.join(rootPath, 'android');
+  String get iosPath => path.join(rootPath, 'ios');
 
   Future<void> addCustomBuildType(String name, {String initWith}) async {
     final File buildScript = File(
@@ -299,6 +312,20 @@ android {
     await buildScript.writeAsString((await buildScript.readAsString()).replaceAll('buildTypes', 'builTypes'));
   }
 
+  Future<void> introducePubspecError() async {
+    final File pubspec = File(
+      path.join(parent.path, 'hello', 'pubspec.yaml')
+    );
+    final String contents = pubspec.readAsStringSync();
+    final String newContents = contents.replaceFirst('# The following section is specific to Flutter.\nflutter:\n', '''
+flutter:
+  assets:
+    - lib/gallery/example_code.dart
+
+''');
+    pubspec.writeAsStringSync(newContents);
+  }
+
   Future<void> runGradleTask(String task, {List<String> options}) async {
     return _runGradleTask(workingDirectory: androidPath, task: task, options: options);
   }
@@ -324,7 +351,7 @@ class FlutterPluginProject {
 
   static Future<FlutterPluginProject> create(Directory directory, String name) async {
     await inDirectory(directory, () async {
-      await flutter('create', options: <String>['--template=plugin', name]);
+      await flutter('create', options: <String>['--template=plugin', '--platforms=ios,android', name]);
     });
     return FlutterPluginProject(directory, name);
   }
@@ -332,15 +359,31 @@ class FlutterPluginProject {
   String get rootPath => path.join(parent.path, name);
   String get examplePath => path.join(rootPath, 'example');
   String get exampleAndroidPath => path.join(examplePath, 'android');
-  String get debugApkPath => path.join(examplePath, 'build', 'app', 'outputs', 'apk', 'debug', 'app-debug.apk');
-  String get releaseApkPath => path.join(examplePath, 'build', 'app', 'outputs', 'apk', 'release', 'app-release.apk');
-  String get releaseArmApkPath => path.join(examplePath, 'build', 'app', 'outputs', 'apk', 'release', 'app-armeabi-v7a-release.apk');
-  String get releaseArm64ApkPath => path.join(examplePath, 'build', 'app', 'outputs', 'apk', 'release', 'app-arm64-v8a-release.apk');
+  String get debugApkPath => path.join(examplePath, 'build', 'app', 'outputs', 'flutter-apk', 'app-debug.apk');
+  String get releaseApkPath => path.join(examplePath, 'build', 'app', 'outputs', 'flutter-apk', 'app-release.apk');
+  String get releaseArmApkPath => path.join(examplePath, 'build', 'app', 'outputs', 'flutter-apk','app-armeabi-v7a-release.apk');
+  String get releaseArm64ApkPath => path.join(examplePath, 'build', 'app', 'outputs', 'flutter-apk', 'app-arm64-v8a-release.apk');
   String get releaseBundlePath => path.join(examplePath, 'build', 'app', 'outputs', 'bundle', 'release', 'app.aab');
 
   Future<void> runGradleTask(String task, {List<String> options}) async {
     return _runGradleTask(workingDirectory: exampleAndroidPath, task: task, options: options);
   }
+}
+
+class FlutterModuleProject {
+  FlutterModuleProject(this.parent, this.name);
+
+  final Directory parent;
+  final String name;
+
+  static Future<FlutterModuleProject> create(Directory directory, String name) async {
+    await inDirectory(directory, () async {
+      await flutter('create', options: <String>['--template=module', name]);
+    });
+    return FlutterModuleProject(directory, name);
+  }
+
+  String get rootPath => path.join(parent.path, name);
 }
 
 Future<void> _runGradleTask({String workingDirectory, String task, List<String> options}) async {

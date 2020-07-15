@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -37,7 +39,9 @@ class Scrollbar extends StatefulWidget {
     Key key,
     @required this.child,
     this.controller,
-  }) : super(key: key);
+    this.isAlwaysShown = false,
+  }) : assert(!isAlwaysShown || controller != null, 'When isAlwaysShown is true, must pass a controller that is attached to a scroll view'),
+       super(key: key);
 
   /// The widget below this widget in the tree.
   ///
@@ -49,6 +53,9 @@ class Scrollbar extends StatefulWidget {
 
   /// {@macro flutter.cupertino.cupertinoScrollbar.controller}
   final ScrollController controller;
+
+  /// {@macro flutter.cupertino.cupertinoScrollbar.isAlwaysShown}
+  final bool isAlwaysShown;
 
   @override
   _ScrollbarState createState() => _ScrollbarState();
@@ -96,13 +103,41 @@ class _ScrollbarState extends State<Scrollbar> with TickerProviderStateMixin {
         break;
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
         _themeColor = theme.highlightColor.withOpacity(1.0);
         _textDirection = Directionality.of(context);
         _materialPainter = _buildMaterialScrollbarPainter();
         _useCupertinoScrollbar = false;
+        _triggerScrollbar();
         break;
     }
     assert(_useCupertinoScrollbar != null);
+  }
+
+  @override
+  void didUpdateWidget(Scrollbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isAlwaysShown != oldWidget.isAlwaysShown) {
+      if (widget.isAlwaysShown == false) {
+        _fadeoutAnimationController.reverse();
+      } else {
+        _triggerScrollbar();
+        _fadeoutAnimationController.animateTo(1.0);
+      }
+    }
+  }
+
+  // Wait one frame and cause an empty scroll event.  This allows the thumb to
+  // show immediately when isAlwaysShown is true.  A scroll event is required in
+  // order to paint the thumb.
+  void _triggerScrollbar() {
+    WidgetsBinding.instance.addPostFrameCallback((Duration duration) {
+      if (widget.isAlwaysShown) {
+        _fadeoutTimer?.cancel();
+        widget.controller.position.didUpdateScrollPositionBy(0);
+      }
+    });
   }
 
   ScrollbarPainter _buildMaterialScrollbarPainter() {
@@ -124,17 +159,23 @@ class _ScrollbarState extends State<Scrollbar> with TickerProviderStateMixin {
     // iOS sub-delegates to the CupertinoScrollbar instead and doesn't handle
     // scroll notifications here.
     if (!_useCupertinoScrollbar &&
-        (notification is ScrollUpdateNotification || notification is OverscrollNotification)) {
+        (notification is ScrollUpdateNotification ||
+            notification is OverscrollNotification)) {
       if (_fadeoutAnimationController.status != AnimationStatus.forward) {
         _fadeoutAnimationController.forward();
       }
 
-      _materialPainter.update(notification.metrics, notification.metrics.axisDirection);
-      _fadeoutTimer?.cancel();
-      _fadeoutTimer = Timer(_kScrollbarTimeToFade, () {
-        _fadeoutAnimationController.reverse();
-        _fadeoutTimer = null;
-      });
+      _materialPainter.update(
+        notification.metrics,
+        notification.metrics.axisDirection,
+      );
+      if (!widget.isAlwaysShown) {
+        _fadeoutTimer?.cancel();
+        _fadeoutTimer = Timer(_kScrollbarTimeToFade, () {
+          _fadeoutAnimationController.reverse();
+          _fadeoutTimer = null;
+        });
+      }
     }
     return false;
   }
@@ -152,6 +193,7 @@ class _ScrollbarState extends State<Scrollbar> with TickerProviderStateMixin {
     if (_useCupertinoScrollbar) {
       return CupertinoScrollbar(
         child: widget.child,
+        isAlwaysShown: widget.isAlwaysShown,
         controller: widget.controller,
       );
     }

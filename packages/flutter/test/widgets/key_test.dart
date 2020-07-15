@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
 
@@ -9,6 +11,7 @@ class TestValueKey<T> extends ValueKey<T> {
   const TestValueKey(T value) : super(value);
 }
 
+@immutable
 class NotEquals {
   const NotEquals();
   @override

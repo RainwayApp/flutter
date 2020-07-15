@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,7 +36,7 @@ void main() {
     expect(material.clipBehavior, Clip.none);
     expect(material.color, const Color(0xffe0e0e0));
     expect(material.elevation, 2.0);
-    expect(material.shadowColor, const Color(0xff000000));
+    expect(material.shadowColor, null);
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.0)));
     expect(material.textStyle.color, const Color(0xdd000000));
     expect(material.textStyle.fontFamily, 'Roboto');
@@ -54,7 +56,7 @@ void main() {
     expect(material.clipBehavior, Clip.none);
     expect(material.color, const Color(0xffe0e0e0));
     expect(material.elevation, 8.0);
-    expect(material.shadowColor, const Color(0xff000000));
+    expect(material.shadowColor, null);
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.0)));
     expect(material.textStyle.color, const Color(0xdd000000));
     expect(material.textStyle.fontFamily, 'Roboto');
@@ -79,7 +81,7 @@ void main() {
     expect(material.clipBehavior, Clip.none);
     expect(material.color, const Color(0x61000000));
     expect(material.elevation, 0.0);
-    expect(material.shadowColor, const Color(0xff000000));
+    expect(material.shadowColor, null);
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.0)));
     expect(material.textStyle.color, const Color(0x61000000));
     expect(material.textStyle.fontFamily, 'Roboto');
@@ -155,7 +157,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 800)); // Wait for splash and highlight to be well under way.
     await expectLater(tester, meetsGuideline(textContrastGuideline));
   },
-    skip: isBrowser,
+    skip: isBrowser, // https://github.com/flutter/flutter/issues/44115
     semanticsEnabled: true,
   );
 
@@ -431,6 +433,76 @@ void main() {
     await gesture.removePointer();
   });
 
+  testWidgets('RaisedButton changes mouse cursor when hovered', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.forbidden,
+          child: RaisedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('Hello'),
+            onPressed: () {},
+            mouseCursor: SystemMouseCursors.text,
+          ),
+        ),
+      ),
+    );
+
+    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse, pointer: 1);
+    await gesture.addPointer(location: const Offset(1, 1));
+    addTearDown(gesture.removePointer);
+
+    await tester.pump();
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.text);
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.forbidden,
+          child: RaisedButton(
+            onPressed: () {},
+            mouseCursor: SystemMouseCursors.text,
+          ),
+        ),
+      ),
+    );
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.text);
+
+    // Test default cursor
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.forbidden,
+          child: RaisedButton(
+            onPressed: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.click);
+
+    // Test default cursor when disabled
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.forbidden,
+          child: RaisedButton(
+            onPressed: null,
+          ),
+        ),
+      ),
+    );
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.basic);
+  });
+
+
   testWidgets('Does RaisedButton work with focus', (WidgetTester tester) async {
     const Color focusColor = Color(0xff001122);
 
@@ -616,6 +688,46 @@ void main() {
     childRect = tester.getRect(find.byKey(childKey));
     expect(box.size, equals(const Size(76, 36)));
     expect(childRect, equals(const Rect.fromLTRB(372.0, 293.0, 428.0, 307.0)));
+  });
+
+  testWidgets('RaisedButton.icon responds to applied padding', (WidgetTester tester) async {
+    const Key buttonKey = Key('test');
+    const Key labelKey = Key('label');
+    await tester.pumpWidget(
+      // When textDirection is set to TextDirection.ltr, the label appears on the
+      // right side of the icon. This is important in determining whether the
+      // horizontal padding is applied correctly later on
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Material(
+          child: Center(
+            child: RaisedButton.icon(
+              icon: const Icon(Icons.add),
+              padding: const EdgeInsets.fromLTRB(16, 5, 10, 12),
+              key: buttonKey,
+              onPressed: () {},
+              label: const Text(
+                'Hello',
+                key: labelKey,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Rect paddingRect = tester.getRect(find.byType(Padding));
+    final Rect labelRect = tester.getRect(find.byKey(labelKey));
+    final Rect iconRect = tester.getRect(find.byType(Icon));
+
+    // The right padding should be applied on the right of the label, whereas the
+    // left padding should be applied on the left side of the icon.
+    expect(paddingRect.right, labelRect.right + 10);
+    expect(paddingRect.left, iconRect.left - 16);
+    // Use the taller widget to check the top and bottom padding.
+    final Rect tallerWidget = iconRect.height > labelRect.height ? iconRect : labelRect;
+    expect(paddingRect.top, tallerWidget.top - 5);
+    expect(paddingRect.bottom, tallerWidget.bottom + 12);
   });
 }
 

@@ -5,21 +5,24 @@
 import 'dart:async';
 
 import 'package:file/memory.dart';
-import 'package:platform/platform.dart';
-
+import 'package:file_testing/file_testing.dart';
 import 'package:flutter_tools/src/android/android_device.dart';
 import 'package:flutter_tools/src/base/common.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
+import 'package:flutter_tools/src/base/platform.dart';
+import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/drive.dart';
 import 'package:flutter_tools/src/device.dart';
-import 'package:flutter_tools/src/build_info.dart';
-import 'package:mockito/mockito.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
+import 'package:mockito/mockito.dart';
+import 'package:webdriver/sync_io.dart' as sync_io;
+import 'package:flutter_tools/src/vmservice.dart';
 
 import '../../src/common.dart';
 import '../../src/context.dart';
+import '../../src/fakes.dart';
 import '../../src/mocks.dart';
 
 void main() {
@@ -41,10 +44,10 @@ void main() {
       fs.currentDirectory = tempDir;
       fs.directory('test').createSync();
       fs.directory('test_driver').createSync();
-      fs.file('pubspec.yaml')..createSync();
+      fs.file('pubspec.yaml').createSync();
       fs.file('.packages').createSync();
       setExitFunctionForTests();
-      appStarter = (DriveCommand command) {
+      appStarter = (DriveCommand command, Uri webUri) {
         throw 'Unexpected call to appStarter';
       };
       testRunner = (List<String> testArgs, Map<String, String> environment) {
@@ -90,7 +93,7 @@ void main() {
 
     testUsingContext('returns 1 when app fails to run', () async {
       testDeviceManager.addDevice(MockDevice());
-      appStarter = expectAsync1((DriveCommand command) async => null);
+      appStarter = expectAsync2((DriveCommand command, Uri webUri) async => null);
 
       final String testApp = globals.fs.path.join(tempDir.path, 'test_driver', 'e2e.dart');
       final String testFile = globals.fs.path.join(tempDir.path, 'test_driver', 'e2e_test.dart');
@@ -163,13 +166,34 @@ void main() {
       ProcessManager: () => FakeProcessManager.any(),
     });
 
-    testUsingContext('returns 0 when test ends successfully', () async {
+    testUsingContext('returns 1 when targeted device is not Android with --device-user', () async {
       testDeviceManager.addDevice(MockDevice());
+
+      final String testApp = globals.fs.path.join(tempDir.path, 'test', 'e2e.dart');
+      globals.fs.file(testApp).createSync(recursive: true);
+
+      final List<String> args = <String>[
+        'drive',
+        '--target=$testApp',
+        '--no-pub',
+        '--device-user',
+        '10',
+      ];
+
+      expect(() async => await createTestCommandRunner(command).run(args),
+        throwsToolExit(message: '--device-user is only supported for Android'));
+    }, overrides: <Type, Generator>{
+      FileSystem: () => fs,
+      ProcessManager: () => FakeProcessManager.any(),
+    });
+
+    testUsingContext('returns 0 when test ends successfully', () async {
+      testDeviceManager.addDevice(MockAndroidDevice());
 
       final String testApp = globals.fs.path.join(tempDir.path, 'test', 'e2e.dart');
       final String testFile = globals.fs.path.join(tempDir.path, 'test_driver', 'e2e_test.dart');
 
-      appStarter = expectAsync1((DriveCommand command) async {
+      appStarter = expectAsync2((DriveCommand command, Uri webUri) async {
         return LaunchResult.succeeded();
       });
       testRunner = expectAsync2((List<String> testArgs, Map<String, String> environment) async {
@@ -177,10 +201,6 @@ void main() {
         // VM_SERVICE_URL is not set by drive command arguments
         expect(environment, <String, String>{
           'VM_SERVICE_URL': 'null',
-          'SELENIUM_PORT': '4567',
-          'BROWSER_NAME': 'firefox',
-          'BROWSER_DIMENSION': '1024,768',
-          'HEADLESS': 'false',
         });
         return null;
       });
@@ -196,10 +216,8 @@ void main() {
         'drive',
         '--target=$testApp',
         '--no-pub',
-        '--no-headless',
-        '--driver-port=4567',
-        '--browser-name=firefox',
-        '--browser-dimension=1024,768',
+        '--device-user',
+        '10',
       ];
       await createTestCommandRunner(command).run(args);
       expect(testLogger.errorText, isEmpty);
@@ -214,7 +232,7 @@ void main() {
       final String testApp = globals.fs.path.join(tempDir.path, 'test', 'e2e.dart');
       final String testFile = globals.fs.path.join(tempDir.path, 'test_driver', 'e2e_test.dart');
 
-      appStarter = expectAsync1((DriveCommand command) async {
+      appStarter = expectAsync2((DriveCommand command, Uri webUri) async {
         return LaunchResult.succeeded();
       });
       testRunner = (List<String> testArgs, Map<String, String> environment) async {
@@ -358,19 +376,21 @@ void main() {
         final Device mockDevice = MockDevice();
         testDeviceManager.addDevice(mockDevice);
 
-        final MockDeviceLogReader mockDeviceLogReader = MockDeviceLogReader();
+        final FakeDeviceLogReader mockDeviceLogReader = FakeDeviceLogReader();
         when(mockDevice.getLogReader()).thenReturn(mockDeviceLogReader);
         final MockLaunchResult mockLaunchResult = MockLaunchResult();
         when(mockLaunchResult.started).thenReturn(true);
         when(mockDevice.startApp(
-            null,
-            mainPath: anyNamed('mainPath'),
-            route: anyNamed('route'),
-            debuggingOptions: anyNamed('debuggingOptions'),
-            platformArgs: anyNamed('platformArgs'),
-            prebuiltApplication: anyNamed('prebuiltApplication'),
+          null,
+          mainPath: anyNamed('mainPath'),
+          route: anyNamed('route'),
+          debuggingOptions: anyNamed('debuggingOptions'),
+          platformArgs: anyNamed('platformArgs'),
+          prebuiltApplication: anyNamed('prebuiltApplication'),
+          userIdentifier: anyNamed('userIdentifier'),
         )).thenAnswer((_) => Future<LaunchResult>.value(mockLaunchResult));
-        when(mockDevice.isAppInstalled(any)).thenAnswer((_) => Future<bool>.value(false));
+        when(mockDevice.isAppInstalled(any, userIdentifier: anyNamed('userIdentifier')))
+          .thenAnswer((_) => Future<bool>.value(false));
 
         testApp = globals.fs.path.join(tempDir.path, 'test', 'e2e.dart');
         testFile = globals.fs.path.join(tempDir.path, 'test_driver', 'e2e_test.dart');
@@ -412,6 +432,7 @@ void main() {
                 debuggingOptions: anyNamed('debuggingOptions'),
                 platformArgs: anyNamed('platformArgs'),
                 prebuiltApplication: false,
+                userIdentifier: anyNamed('userIdentifier'),
         ));
       }, overrides: <Type, Generator>{
         FileSystem: () => fs,
@@ -440,6 +461,7 @@ void main() {
                 debuggingOptions: anyNamed('debuggingOptions'),
                 platformArgs: anyNamed('platformArgs'),
                 prebuiltApplication: false,
+                userIdentifier: anyNamed('userIdentifier'),
         ));
       }, overrides: <Type, Generator>{
         FileSystem: () => fs,
@@ -468,6 +490,7 @@ void main() {
                 debuggingOptions: anyNamed('debuggingOptions'),
                 platformArgs: anyNamed('platformArgs'),
                 prebuiltApplication: true,
+                userIdentifier: anyNamed('userIdentifier'),
         ));
       }, overrides: <Type, Generator>{
         FileSystem: () => fs,
@@ -488,7 +511,7 @@ void main() {
         final Device mockDevice = MockDevice();
         testDeviceManager.addDevice(mockDevice);
 
-        final MockDeviceLogReader mockDeviceLogReader = MockDeviceLogReader();
+        final FakeDeviceLogReader mockDeviceLogReader = FakeDeviceLogReader();
         when(mockDevice.getLogReader()).thenReturn(mockDeviceLogReader);
         final MockLaunchResult mockLaunchResult = MockLaunchResult();
         when(mockLaunchResult.started).thenReturn(true);
@@ -499,11 +522,12 @@ void main() {
           debuggingOptions: anyNamed('debuggingOptions'),
           platformArgs: anyNamed('platformArgs'),
           prebuiltApplication: anyNamed('prebuiltApplication'),
+          userIdentifier: anyNamed('userIdentifier'),
         )).thenAnswer((Invocation invocation) async {
           debuggingOptions = invocation.namedArguments[#debuggingOptions] as DebuggingOptions;
           return mockLaunchResult;
         });
-        when(mockDevice.isAppInstalled(any))
+        when(mockDevice.isAppInstalled(any, userIdentifier: anyNamed('userIdentifier')))
             .thenAnswer((_) => Future<bool>.value(false));
 
         testApp = globals.fs.path.join(tempDir.path, 'test', 'e2e.dart');
@@ -552,6 +576,7 @@ void main() {
             debuggingOptions: anyNamed('debuggingOptions'),
             platformArgs: anyNamed('platformArgs'),
             prebuiltApplication: false,
+            userIdentifier: anyNamed('userIdentifier'),
           ));
           expect(optionValue(), setToTrue ? isTrue : isFalse);
         }, overrides: <Type, Generator>{
@@ -583,6 +608,180 @@ void main() {
         () => debuggingOptions.cacheSkSL,
       );
     });
+  });
+
+  group('getDesiredCapabilities', () {
+    test('Chrome with headless on', () {
+      final Map<String, dynamic> expected = <String, dynamic>{
+        'acceptInsecureCerts': true,
+        'browserName': 'chrome',
+        'goog:loggingPrefs': <String, String>{ sync_io.LogType.performance: 'ALL'},
+        'chromeOptions': <String, dynamic>{
+          'w3c': false,
+          'args': <String>[
+            '--bwsi',
+            '--disable-background-timer-throttling',
+            '--disable-default-apps',
+            '--disable-extensions',
+            '--disable-popup-blocking',
+            '--disable-translate',
+            '--no-default-browser-check',
+            '--no-sandbox',
+            '--no-first-run',
+            '--headless'
+          ],
+          'perfLoggingPrefs': <String, String>{
+            'traceCategories':
+            'devtools.timeline,'
+                'v8,blink.console,benchmark,blink,'
+                'blink.user_timing'
+          }
+        }
+      };
+
+      expect(getDesiredCapabilities(Browser.chrome, true), expected);
+    });
+
+    test('Chrome with headless off', () {
+      const String chromeBinary = 'random-binary';
+      final Map<String, dynamic> expected = <String, dynamic>{
+        'acceptInsecureCerts': true,
+        'browserName': 'chrome',
+        'goog:loggingPrefs': <String, String>{ sync_io.LogType.performance: 'ALL'},
+        'chromeOptions': <String, dynamic>{
+          'binary': chromeBinary,
+          'w3c': false,
+          'args': <String>[
+            '--bwsi',
+            '--disable-background-timer-throttling',
+            '--disable-default-apps',
+            '--disable-extensions',
+            '--disable-popup-blocking',
+            '--disable-translate',
+            '--no-default-browser-check',
+            '--no-sandbox',
+            '--no-first-run',
+          ],
+          'perfLoggingPrefs': <String, String>{
+            'traceCategories':
+            'devtools.timeline,'
+                'v8,blink.console,benchmark,blink,'
+                'blink.user_timing'
+          }
+        }
+      };
+
+      expect(getDesiredCapabilities(Browser.chrome, false, chromeBinary), expected);
+
+    });
+
+    test('Firefox with headless on', () {
+      final Map<String, dynamic> expected = <String, dynamic>{
+        'acceptInsecureCerts': true,
+        'browserName': 'firefox',
+        'moz:firefoxOptions' : <String, dynamic>{
+          'args': <String>['-headless'],
+          'prefs': <String, dynamic>{
+            'dom.file.createInChild': true,
+            'dom.timeout.background_throttling_max_budget': -1,
+            'media.autoplay.default': 0,
+            'media.gmp-manager.url': '',
+            'media.gmp-provider.enabled': false,
+            'network.captive-portal-service.enabled': false,
+            'security.insecure_field_warning.contextual.enabled': false,
+            'test.currentTimeOffsetSeconds': 11491200
+          },
+          'log': <String, String>{'level': 'trace'}
+        }
+      };
+
+      expect(getDesiredCapabilities(Browser.firefox, true), expected);
+    });
+
+    test('Firefox with headless off', () {
+      final Map<String, dynamic> expected = <String, dynamic>{
+        'acceptInsecureCerts': true,
+        'browserName': 'firefox',
+        'moz:firefoxOptions' : <String, dynamic>{
+          'args': <String>[],
+          'prefs': <String, dynamic>{
+            'dom.file.createInChild': true,
+            'dom.timeout.background_throttling_max_budget': -1,
+            'media.autoplay.default': 0,
+            'media.gmp-manager.url': '',
+            'media.gmp-provider.enabled': false,
+            'network.captive-portal-service.enabled': false,
+            'security.insecure_field_warning.contextual.enabled': false,
+            'test.currentTimeOffsetSeconds': 11491200
+          },
+          'log': <String, String>{'level': 'trace'}
+        }
+      };
+
+      expect(getDesiredCapabilities(Browser.firefox, false), expected);
+    });
+
+    test('Edge', () {
+      final Map<String, dynamic> expected = <String, dynamic>{
+        'acceptInsecureCerts': true,
+        'browserName': 'edge',
+      };
+
+      expect(getDesiredCapabilities(Browser.edge, false), expected);
+    });
+
+    test('macOS Safari', () {
+      final Map<String, dynamic> expected = <String, dynamic>{
+        'browserName': 'safari',
+      };
+
+      expect(getDesiredCapabilities(Browser.safari, false), expected);
+    });
+
+    test('iOS Safari', () {
+      final Map<String, dynamic> expected = <String, dynamic>{
+        'platformName': 'ios',
+        'browserName': 'safari',
+        'safari:useSimulator': true
+      };
+
+      expect(getDesiredCapabilities(Browser.iosSafari, false), expected);
+    });
+
+    test('android chrome', () {
+      final Map<String, dynamic> expected = <String, dynamic>{
+        'browserName': 'chrome',
+        'platformName': 'android',
+        'goog:chromeOptions': <String, dynamic>{
+          'androidPackage': 'com.android.chrome',
+          'args': <String>['--disable-fullscreen']
+        },
+      };
+
+      expect(getDesiredCapabilities(Browser.androidChrome, false), expected);
+    });
+  });
+
+  testUsingContext('Can write SkSL file with provided output file', () async {
+    final MockDevice device = MockDevice();
+    when(device.name).thenReturn('foo');
+    when(device.targetPlatform).thenAnswer((Invocation invocation) async {
+      return TargetPlatform.android_arm;
+    });
+    final File outputFile = globals.fs.file('out/foo');
+
+    final String result = await sharedSkSlWriter(
+      device,
+      <String, Object>{'foo': 'bar'},
+      outputFile: outputFile,
+    );
+
+    expect(result, 'out/foo');
+    expect(outputFile, exists);
+    expect(outputFile.readAsStringSync(), '{"platform":"android","name":"foo","engineRevision":null,"data":{"foo":"bar"}}');
+  }, overrides: <Type, Generator>{
+    FileSystem: () => MemoryFileSystem.test(),
+    ProcessManager: () => FakeProcessManager.any(),
   });
 }
 

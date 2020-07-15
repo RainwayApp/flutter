@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import '../base/file_system.dart';
-import '../cache.dart';
 import '../codegen.dart';
 import '../convert.dart';
 import '../globals.dart' as globals;
@@ -21,9 +20,19 @@ class GenerateCommand extends FlutterCommand {
   String get name => 'generate';
 
   @override
+  bool get hidden => true;
+
+  @override
   Future<FlutterCommandResult> runCommand() async {
-    Cache.releaseLockEarly();
     final FlutterProject flutterProject = FlutterProject.current();
+    globals.printError(<String>[
+      '"flutter generate" is deprecated, use "dart pub run build_runner" instead. ',
+      'The following dependencies must be added to dev_dependencies in pubspec.yaml:',
+      'build_runner: 1.10.0',
+      for (Object dependency in flutterProject.builders?.keys ?? const <Object>[])
+        '$dependency: ${flutterProject.builders[dependency]}'
+    ].join('\n'));
+
     final CodegenDaemon codegenDaemon = await codeGenerator.daemon(flutterProject);
     codegenDaemon.startBuild();
     await for (final CodegenStatus codegenStatus in codegenDaemon.buildResults) {
@@ -52,8 +61,8 @@ class GenerateCommand extends FlutterCommand {
         globals.printError(stackData[0] as String);
         globals.printError(stackData[1] as String);
         globals.printError(StackTrace.fromString(stackData[2] as String).toString());
-      } catch (err) {
-        globals.printError('Error reading error in ${errorFile.path}');
+      } on Exception catch (err) {
+        globals.printError('Error reading error in ${errorFile.path}: $err');
       }
     }
     return FlutterCommandResult.fail();

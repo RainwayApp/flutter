@@ -2,12 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
+import 'dart:io' as io;
+
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
+import 'package:flutter_tools/src/base/io.dart';
+import 'package:flutter_tools/src/base/platform.dart';
+import 'package:flutter_tools/src/base/signals.dart';
 import 'package:mockito/mockito.dart';
-import 'package:platform/platform.dart';
 
 import '../../src/common.dart';
+import '../../src/context.dart';
 
 class MockPlatform extends Mock implements Platform {}
 
@@ -105,8 +111,8 @@ void main() {
         fileSystem: fileSystem,
         platform: FakePlatform(operatingSystem: 'windows'),
       );
-      expect(fsUtils.escapePath('C:\\foo\\bar\\cool.dart'), 'C:\\\\foo\\\\bar\\\\cool.dart');
-      expect(fsUtils.escapePath('foo\\bar\\cool.dart'), 'foo\\\\bar\\\\cool.dart');
+      expect(fsUtils.escapePath(r'C:\foo\bar\cool.dart'), r'C:\\foo\\bar\\cool.dart');
+      expect(fsUtils.escapePath(r'foo\bar\cool.dart'), r'foo\\bar\\cool.dart');
       expect(fsUtils.escapePath('C:/foo/bar/cool.dart'), 'C:/foo/bar/cool.dart');
     });
 
@@ -118,7 +124,43 @@ void main() {
       );
       expect(fsUtils.escapePath('/foo/bar/cool.dart'), '/foo/bar/cool.dart');
       expect(fsUtils.escapePath('foo/bar/cool.dart'), 'foo/bar/cool.dart');
-      expect(fsUtils.escapePath('foo\\cool.dart'), 'foo\\cool.dart');
+      expect(fsUtils.escapePath(r'foo\cool.dart'), r'foo\cool.dart');
+    });
+  });
+
+  group('LocalFileSystem', () {
+    MockIoProcessSignal mockSignal;
+    ProcessSignal signalUnderTest;
+    StreamController<io.ProcessSignal> controller;
+
+    setUp(() {
+      mockSignal = MockIoProcessSignal();
+      signalUnderTest = ProcessSignal(mockSignal);
+      controller = StreamController<io.ProcessSignal>();
+      when(mockSignal.watch()).thenAnswer((Invocation invocation) => controller.stream);
+    });
+
+    testUsingContext('deletes system temp entry on a fatal signal', () async {
+      final Completer<void> completer = Completer<void>();
+      final Signals signals = Signals.test();
+      final LocalFileSystem localFileSystem = LocalFileSystem.test(
+        signals: signals,
+        fatalSignals: <ProcessSignal>[signalUnderTest],
+      );
+      final Directory temp = localFileSystem.systemTempDirectory;
+
+      signals.addHandler(signalUnderTest, (ProcessSignal s) {
+        completer.complete();
+      });
+
+      expect(temp.existsSync(), isTrue);
+
+      controller.add(mockSignal);
+      await completer.future;
+
+      expect(temp.existsSync(), isFalse);
     });
   });
 }
+
+class MockIoProcessSignal extends Mock implements io.ProcessSignal {}

@@ -42,7 +42,7 @@ const String _extensionMethod = 'ext.flutter.$_extensionMethodName';
 /// eventually completes to a string response.
 typedef DataHandler = Future<String> Function(String message);
 
-class _DriverBinding extends BindingBase with ServicesBinding, SchedulerBinding, GestureBinding, PaintingBinding, SemanticsBinding, RendererBinding, WidgetsBinding {
+class _DriverBinding extends BindingBase with SchedulerBinding, ServicesBinding, GestureBinding, PaintingBinding, SemanticsBinding, RendererBinding, WidgetsBinding {
   _DriverBinding(this._handler, this._silenceErrors);
 
   final DataHandler _handler;
@@ -70,7 +70,11 @@ class _DriverBinding extends BindingBase with ServicesBinding, SchedulerBinding,
 /// Enables Flutter Driver VM service extension.
 ///
 /// This extension is required for tests that use `package:flutter_driver` to
-/// drive applications from a separate process.
+/// drive applications from a separate process. In order to allow the driver
+/// to interact with the application, this method changes the behavior of the
+/// framework in several ways - including keyboard interaction and text
+/// editing. Applications intended for release should never include this
+/// method.
 ///
 /// Call this function prior to running your application, e.g. before you call
 /// `runApp`.
@@ -125,9 +129,9 @@ class FlutterDriverExtension {
       'waitFor': _waitFor,
       'waitForAbsent': _waitForAbsent,
       'waitForCondition': _waitForCondition,
-      'waitUntilNoTransientCallbacks': _waitUntilNoTransientCallbacks, // ignore: deprecated_member_use_from_same_package
-      'waitUntilNoPendingFrame': _waitUntilNoPendingFrame, // ignore: deprecated_member_use_from_same_package
-      'waitUntilFirstFrameRasterized': _waitUntilFirstFrameRasterized, // ignore: deprecated_member_use_from_same_package
+      'waitUntilNoTransientCallbacks': _waitUntilNoTransientCallbacks,
+      'waitUntilNoPendingFrame': _waitUntilNoPendingFrame,
+      'waitUntilFirstFrameRasterized': _waitUntilFirstFrameRasterized,
       'get_semantics_id': _getSemanticsId,
       'get_offset': _getOffset,
       'get_diagnostics_tree': _getDiagnosticsTree,
@@ -149,9 +153,9 @@ class FlutterDriverExtension {
       'waitFor': (Map<String, String> params) => WaitFor.deserialize(params),
       'waitForAbsent': (Map<String, String> params) => WaitForAbsent.deserialize(params),
       'waitForCondition': (Map<String, String> params) => WaitForCondition.deserialize(params),
-      'waitUntilNoTransientCallbacks': (Map<String, String> params) => WaitUntilNoTransientCallbacks.deserialize(params), // ignore: deprecated_member_use_from_same_package
-      'waitUntilNoPendingFrame': (Map<String, String> params) => WaitUntilNoPendingFrame.deserialize(params), // ignore: deprecated_member_use_from_same_package
-      'waitUntilFirstFrameRasterized': (Map<String, String> params) => WaitUntilFirstFrameRasterized.deserialize(params), // ignore: deprecated_member_use_from_same_package
+      'waitUntilNoTransientCallbacks': (Map<String, String> params) => WaitUntilNoTransientCallbacks.deserialize(params),
+      'waitUntilNoPendingFrame': (Map<String, String> params) => WaitUntilNoPendingFrame.deserialize(params),
+      'waitUntilFirstFrameRasterized': (Map<String, String> params) => WaitUntilFirstFrameRasterized.deserialize(params),
       'get_semantics_id': (Map<String, String> params) => GetSemanticsId.deserialize(params),
       'get_offset': (Map<String, String> params) => GetOffset.deserialize(params),
       'get_diagnostics_tree': (Map<String, String> params) => GetDiagnosticsTree.deserialize(params),

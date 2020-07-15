@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' show Offset;
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +13,7 @@ import 'lsq_solver.dart';
 export 'dart:ui' show Offset;
 
 /// A velocity in two dimensions.
+@immutable
 class Velocity {
   /// Creates a velocity.
   ///

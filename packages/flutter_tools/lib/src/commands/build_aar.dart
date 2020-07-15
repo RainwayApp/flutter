@@ -4,20 +4,22 @@
 
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import '../android/android_builder.dart';
-import '../android/android_sdk.dart';
 import '../android/gradle_utils.dart';
 import '../base/common.dart';
 import '../base/os.dart';
 import '../build_info.dart';
 import '../cache.dart';
+import '../globals.dart' as globals;
 import '../project.dart';
 import '../reporting/reporting.dart';
 import '../runner/flutter_command.dart' show FlutterCommandResult;
 import 'build.dart';
 
 class BuildAarCommand extends BuildSubCommand {
-  BuildAarCommand() {
+  BuildAarCommand({ @required bool verboseHelp }) {
     argParser
       ..addFlag(
         'debug',
@@ -34,9 +36,15 @@ class BuildAarCommand extends BuildSubCommand {
         defaultsTo: true,
         help: 'Build a release version of the current project.',
       );
+    addTreeShakeIconsFlag();
     usesFlavorOption();
     usesBuildNumberOption();
     usesPubOption();
+    addSplitDebugInfoOption();
+    addDartObfuscationOption();
+    usesTrackWidgetCreation(verboseHelp: false);
+    addNullSafetyModeOptions(hide: !verboseHelp);
+    addEnableExperimentation(hide: !verboseHelp);
     argParser
       ..addMultiOption(
         'target-platform',
@@ -47,8 +55,8 @@ class BuildAarCommand extends BuildSubCommand {
       )
       ..addOption(
         'output-dir',
-        help: 'The absolute path to the directory where the repository is generated.'
-              'By default, this is \'<current-directory>android/build\'. ',
+        help: 'The absolute path to the directory where the repository is generated. '
+              "By default, this is '<current-directory>android/build'. ",
       );
   }
 
@@ -87,7 +95,7 @@ class BuildAarCommand extends BuildSubCommand {
 
   @override
   Future<FlutterCommandResult> runCommand() async {
-    if (androidSdk == null) {
+    if (globals.androidSdk == null) {
       exitWithNoSdkMessage();
     }
     final Set<AndroidBuildInfo> androidBuildInfo = <AndroidBuildInfo>{};
@@ -103,15 +111,18 @@ class BuildAarCommand extends BuildSubCommand {
 
     for (final String buildMode in const <String>['debug', 'profile', 'release']) {
       if (boolArg(buildMode)) {
-        androidBuildInfo.add(AndroidBuildInfo(
-          BuildInfo(BuildMode.fromName(buildMode), stringArg('flavor')),
-          targetArchs: targetArchitectures,
-        ));
+        androidBuildInfo.add(
+          AndroidBuildInfo(
+            getBuildInfo(forcedBuildMode: BuildMode.fromName(buildMode)),
+            targetArchs: targetArchitectures,
+          )
+        );
       }
     }
     if (androidBuildInfo.isEmpty) {
       throwToolExit('Please specify a build mode and try again.');
     }
+
     await androidBuilder.buildAar(
       project: _getProject(),
       target: '', // Not needed because this command only builds Android's code.

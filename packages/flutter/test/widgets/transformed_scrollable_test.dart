@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -214,5 +216,5 @@ void main() {
     // coordinate space of the screen, the scroll view actually moved far more
     // pixels in its local coordinate system due to the perspective transform.
     expect(controller.offset, greaterThan(100));
-  }, skip: isBrowser);
+  });
 }

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 
 import 'framework.dart';
@@ -19,7 +21,7 @@ import 'framework.dart';
 /// be able to depend on inherited widget ancestors of the context
 /// it's built in.
 ///
-/// {@tool sample --template=freeform}
+/// {@tool dartpad --template=freeform}
 /// This example demonstrates how `InheritedTheme.captureAll()` can be used
 /// to wrap the contents of a new route with the inherited themes that
 /// are present when the route is built - but are not present when route
@@ -121,7 +123,7 @@ abstract class InheritedTheme extends InheritedWidget {
         final Type themeType = theme.runtimeType;
         // Only remember the first theme of any type. This assumes
         // that inherited themes completely shadow ancestors of the
-        // the same type.
+        // same type.
         if (!themeTypes.contains(themeType)) {
           themeTypes.add(themeType);
           themes.add(theme);

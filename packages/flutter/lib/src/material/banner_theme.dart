@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -23,7 +25,8 @@ import 'theme.dart';
 ///
 ///  * [ThemeData], which describes the overall theme information for the
 ///    application.
-class MaterialBannerThemeData extends Diagnosticable {
+@immutable
+class MaterialBannerThemeData with Diagnosticable {
 
   /// Creates a theme that can be used for [MaterialBannerTheme] or
   /// [ThemeData.bannerTheme].

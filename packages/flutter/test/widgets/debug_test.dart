@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,8 +34,8 @@ void main() {
           '   If multiple keyed nodes exist as children of another node, they\n'
           '   must have unique keys.\n'
           '   Flex(direction: vertical, mainAxisAlignment: start,\n'
-          '   crossAxisAlignment: center) has multiple children with key\n'
-          '   [<\'key\'>].\n',
+          '   crossAxisAlignment: center, textBaseline: alphabetic) has\n'
+          "   multiple children with key [<'key'>].\n",
         ),
       );
     }
@@ -56,7 +58,7 @@ void main() {
         error.toStringDeep(),
         equalsIgnoringHashCodes(
           'FlutterError\n'
-          '   Duplicate key found: [<\'key\'>].\n'
+          "   Duplicate key found: [<'key'>].\n"
         ),
       );
     }
@@ -206,7 +208,7 @@ void main() {
           '   A build function returned context.widget.\n'
           '   The offending widget is:\n'
           '     Container\n'
-          '   Build functions must never return their BuildContext parameter\'s\n'
+          "   Build functions must never return their BuildContext parameter's\n"
           '   widget or a child that contains "context.widget". Doing so\n'
           '   introduces a loop in the widget tree that can cause the app to\n'
           '   crash.\n'

@@ -59,17 +59,18 @@ void main() {
   });
 
   test('no unauthorized imports of dart:io', () {
-    final List<String> whitelistedPaths = <String>[
+    final List<String> allowedPaths = <String>[
       globals.fs.path.join(flutterTools, 'lib', 'src', 'base', 'io.dart'),
+      globals.fs.path.join(flutterTools, 'lib', 'src', 'base', 'platform.dart'),
       globals.fs.path.join(flutterTools, 'lib', 'src', 'base', 'error_handling_file_system.dart'),
     ];
-    bool _isNotWhitelisted(FileSystemEntity entity) => whitelistedPaths.every((String path) => path != entity.path);
+    bool _isNotAllowed(FileSystemEntity entity) => allowedPaths.every((String path) => path != entity.path);
 
     for (final String dirName in <String>['lib', 'bin']) {
       final Iterable<File> files = globals.fs.directory(globals.fs.path.join(flutterTools, dirName))
         .listSync(recursive: true)
         .where(_isDartFile)
-        .where(_isNotWhitelisted)
+        .where(_isNotAllowed)
         .map(_asFile);
       for (final File file in files) {
         for (final String line in file.readAsLinesSync()) {
@@ -84,19 +85,19 @@ void main() {
   });
 
   test('no unauthorized imports of test_api', () {
-    final List<String> whitelistedPaths = <String>[
+    final List<String> allowedPaths = <String>[
       globals.fs.path.join(flutterTools, 'lib', 'src', 'build_runner', 'build_script.dart'),
       globals.fs.path.join(flutterTools, 'lib', 'src', 'test', 'flutter_platform.dart'),
       globals.fs.path.join(flutterTools, 'lib', 'src', 'test', 'flutter_web_platform.dart'),
       globals.fs.path.join(flutterTools, 'lib', 'src', 'test', 'test_wrapper.dart'),
     ];
-    bool _isNotWhitelisted(FileSystemEntity entity) => whitelistedPaths.every((String path) => path != entity.path);
+    bool _isNotAllowed(FileSystemEntity entity) => allowedPaths.every((String path) => path != entity.path);
 
     for (final String dirName in <String>['lib']) {
       final Iterable<File> files = globals.fs.directory(globals.fs.path.join(flutterTools, dirName))
         .listSync(recursive: true)
         .where(_isDartFile)
-        .where(_isNotWhitelisted)
+        .where(_isNotAllowed)
         .map(_asFile);
       for (final File file in files) {
         for (final String line in file.readAsLinesSync()) {
@@ -111,12 +112,15 @@ void main() {
   });
 
   test('no unauthorized imports of package:path', () {
-    final String whitelistedPath = globals.fs.path.join(flutterTools, 'lib', 'src', 'build_runner', 'web_compilation_delegate.dart');
+    final List<String> allowedPath = <String>[
+      globals.fs.path.join(flutterTools, 'lib', 'src', 'build_runner', 'web_compilation_delegate.dart'),
+      globals.fs.path.join(flutterTools, 'test', 'general.shard', 'platform_plugins_test.dart'),
+    ];
     for (final String dirName in <String>['lib', 'bin', 'test']) {
-      final Iterable<File> files = globals.fs.directory(globals.fs.path.join(flutterTools, dirName))
+      final Iterable<File> files =  globals.fs.directory(globals.fs.path.join(flutterTools, dirName))
         .listSync(recursive: true)
         .where(_isDartFile)
-        .where((FileSystemEntity entity) => entity.path != whitelistedPath)
+        .where((FileSystemEntity entity) => !allowedPath.contains(entity.path))
         .map(_asFile);
       for (final File file in files) {
         for (final String line in file.readAsLinesSync()) {
@@ -130,18 +134,39 @@ void main() {
     }
   });
 
+  test('no unauthorized imports of package:file/local.dart', () {
+    final List<String> allowedPath = <String>[
+      globals.fs.path.join(flutterTools, 'lib', 'src', 'base', 'file_system.dart'),
+    ];
+    for (final String dirName in <String>['lib', 'bin', 'test']) {
+      final Iterable<File> files =  globals.fs.directory(globals.fs.path.join(flutterTools, dirName))
+        .listSync(recursive: true)
+        .where(_isDartFile)
+        .where((FileSystemEntity entity) => !allowedPath.contains(entity.path))
+        .map(_asFile);
+      for (final File file in files) {
+        for (final String line in file.readAsLinesSync()) {
+          if (line.startsWith(RegExp(r'import.*package:file/local.dart'))) {
+            final String relativePath = globals.fs.path.relative(file.path, from:flutterTools);
+            fail("$relativePath imports 'package:file/local.dart'; use 'lib/src/base/file_system.dart' instead");
+          }
+        }
+      }
+    }
+  });
+
   test('no unauthorized imports of dart:convert', () {
-    final List<String> whitelistedPaths = <String>[
+    final List<String> allowedPaths = <String>[
       globals.fs.path.join(flutterTools, 'lib', 'src', 'convert.dart'),
       globals.fs.path.join(flutterTools, 'lib', 'src', 'base', 'error_handling_file_system.dart'),
     ];
-    bool _isNotWhitelisted(FileSystemEntity entity) => whitelistedPaths.every((String path) => path != entity.path);
+    bool _isNotAllowed(FileSystemEntity entity) => allowedPaths.every((String path) => path != entity.path);
 
     for (final String dirName in <String>['lib']) {
       final Iterable<File> files = globals.fs.directory(globals.fs.path.join(flutterTools, dirName))
         .listSync(recursive: true)
         .where(_isDartFile)
-        .where(_isNotWhitelisted)
+        .where(_isNotAllowed)
         .map(_asFile);
       for (final File file in files) {
         for (final String line in file.readAsLinesSync()) {
@@ -155,25 +180,28 @@ void main() {
     }
   });
 
-  test('no unauthorized imports of build_runner', () {
-    final List<String> whitelistedPaths = <String>[
+  test('no unauthorized imports of build_runner or dwds', () {
+    final List<String> allowedPaths = <String>[
       globals.fs.path.join(flutterTools, 'test', 'src', 'build_runner'),
       globals.fs.path.join(flutterTools, 'lib', 'src', 'build_runner'),
       globals.fs.path.join(flutterTools, 'lib', 'executable.dart'),
+      globals.fs.path.join(flutterTools, 'lib', 'devfs_web.dart'),
+      globals.fs.path.join(flutterTools, 'lib', 'resident_web_runner.dart'),
     ];
-    bool _isNotWhitelisted(FileSystemEntity entity) => whitelistedPaths.every((String path) => !entity.path.contains(path));
+    bool _isNotAllowed(FileSystemEntity entity) => allowedPaths.every((String path) => !entity.path.contains(path));
 
     for (final String dirName in <String>['lib']) {
       final Iterable<File> files = globals.fs.directory(globals.fs.path.join(flutterTools, dirName))
         .listSync(recursive: true)
         .where(_isDartFile)
-        .where(_isNotWhitelisted)
+        .where(_isNotAllowed)
         .map(_asFile);
       for (final File file in files) {
         for (final String line in file.readAsLinesSync()) {
           if (line.startsWith(RegExp(r'import.*package:build_runner_core/build_runner_core.dart')) ||
               line.startsWith(RegExp(r'import.*package:build_runner/build_runner.dart')) ||
               line.startsWith(RegExp(r'import.*package:build_config/build_config.dart')) ||
+              line.startsWith(RegExp(r'import.*dwds:*.dart')) ||
               line.startsWith(RegExp(r'import.*build_runner/.*.dart'))) {
             final String relativePath = globals.fs.path.relative(file.path, from:flutterTools);
             fail('$relativePath imports a build_runner package');

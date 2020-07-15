@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -172,7 +174,7 @@ class CustomSemanticsAction {
 ///
 /// Typically obtained from [SemanticsNode.getSemanticsData].
 @immutable
-class SemanticsData extends Diagnosticable {
+class SemanticsData with Diagnosticable {
   /// Creates a semantics data object.
   ///
   /// The [flags], [actions], [label], and [Rect] arguments must not be null.
@@ -376,7 +378,7 @@ class SemanticsData extends Diagnosticable {
   bool hasAction(SemanticsAction action) => (actions & action.index) != 0;
 
   @override
-  String toStringShort() => '${objectRuntimeType(this, 'SemanticsData')}';
+  String toStringShort() => objectRuntimeType(this, 'SemanticsData');
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -1150,7 +1152,7 @@ class SemanticsProperties extends DiagnosticableTree {
   }
 
   @override
-  String toStringShort() => '${objectRuntimeType(this, 'SemanticsProperties')}'; // the hashCode isn't important since we're immutable
+  String toStringShort() => objectRuntimeType(this, 'SemanticsProperties'); // the hashCode isn't important since we're immutable
 }
 
 /// In tests use this function to reset the counter used to generate
@@ -1361,7 +1363,7 @@ class SemanticsNode extends AbstractNode with DiagnosticableTreeMixin {
         final List<DiagnosticsNode> mutationErrors = <DiagnosticsNode>[];
         if (newChildren.length != _debugPreviousSnapshot.length) {
           mutationErrors.add(ErrorDescription(
-            'The list\'s length has changed from ${_debugPreviousSnapshot.length} '
+            "The list's length has changed from ${_debugPreviousSnapshot.length} "
             'to ${newChildren.length}.'
           ));
         } else {
@@ -2622,13 +2624,15 @@ class SemanticsOwner extends ChangeNotifier {
         if (node.isPartOfNodeMerging) {
           assert(node.mergeAllDescendantsIntoThisNode || node.parent != null);
           // if we're merged into our parent, make sure our parent is added to the dirty list
-          if (node.parent != null && node.parent.isPartOfNodeMerging)
+          if (node.parent != null && node.parent.isPartOfNodeMerging) {
             node.parent._markDirty(); // this can add the node to the dirty list
+            node._dirty = false; // We don't want to send update for this node.
+          }
         }
       }
     }
     visitedNodes.sort((SemanticsNode a, SemanticsNode b) => a.depth - b.depth);
-    final ui.SemanticsUpdateBuilder builder = ui.SemanticsUpdateBuilder();
+    final ui.SemanticsUpdateBuilder builder = SemanticsBinding.instance.createSemanticsUpdateBuilder();
     for (final SemanticsNode node in visitedNodes) {
       assert(node.parent?._dirty != true); // could be null (no parent) or false (not dirty)
       // The _serialize() method marks the node as not dirty, and
@@ -3981,50 +3985,56 @@ String _concatStrings({
   return '$thisString\n$nestedLabel';
 }
 
-/// Base class for all sort keys for [Semantics] accessibility traversal order
-/// sorting.
+/// Base class for all sort keys for [SemanticsProperties.sortKey] accessibility
+/// traversal order sorting.
 ///
-/// Only keys of the same type and having matching [name]s are compared. If a
-/// list of sibling [SemanticsNode]s contains keys that are not comparable with
-/// each other the list is first sorted using the default sorting algorithm.
-/// Then the nodes are broken down into groups by moving comparable nodes
-/// towards the _earliest_ node in the group. Finally each group is sorted by
-/// sort key and the resulting list is made by concatenating the sorted groups
-/// back.
+/// Sort keys are sorted by [name], then by the comparison that the subclass
+/// implements. If [SemanticsProperties.sortKey] is specified, sort keys within
+/// the same semantic group must all be of the same type.
 ///
-/// For example, let's take nodes (C, D, B, E, A, F). Let's assign node A key 1,
-/// node B key 2, node C key 3. Let's also assume that the default sort order
-/// leaves the original list intact. Because nodes A, B, and C, have comparable
-/// sort key, they will form a group by pulling all nodes towards the earliest
-/// node, which is C. The result is group (C, B, A). The remaining nodes D, E,
-/// F, form a second group with sort key being `null`. The first group is sorted
-/// using their sort keys becoming (A, B, C). The second group is left as is
-/// because it does not specify sort keys. Then we concatenate the two groups -
-/// (A, B, C) and (D, E, F) - into the final (A, B, C, D, E, F).
+/// Keys with no [name] are compared to other keys with no [name], and will
+/// be traversed before those with a [name].
 ///
-/// Because of the complexity introduced by incomparable sort keys among sibling
-/// nodes, it is recommended to either use comparable keys for all nodes, or
-/// use null for all of them, leaving the sort order to the default algorithm.
+/// If no sort key is applied to a semantics node, then it will be ordered using
+/// a platform dependent default algorithm.
 ///
 /// See also:
 ///
 ///  * [OrdinalSortKey] for a sort key that sorts using an ordinal.
-abstract class SemanticsSortKey extends Diagnosticable implements Comparable<SemanticsSortKey> {
+abstract class SemanticsSortKey with Diagnosticable implements Comparable<SemanticsSortKey> {
   /// Abstract const constructor. This constructor enables subclasses to provide
   /// const constructors so that they can be used in const expressions.
   const SemanticsSortKey({this.name});
 
-  /// An optional name that will make this sort key only order itself
-  /// with respect to other sort keys of the same [name], as long as
-  /// they are of the same [runtimeType].
+  /// An optional name that will group this sort key with other sort keys of the
+  /// same [name].
+  ///
+  /// Sort keys must have the same `runtimeType` when compared.
+  ///
+  /// Keys with no [name] are compared to other keys with no [name], and will
+  /// be traversed before those with a [name].
   final String name;
 
   @override
   int compareTo(SemanticsSortKey other) {
-    // The sorting algorithm must not compare incomparable keys.
-    assert(runtimeType == other.runtimeType);
-    assert(name == other.name);
-    return doCompare(other);
+    // Sort by name first and then subclass ordering.
+    assert(runtimeType == other.runtimeType, 'Semantics sort keys can only be compared to other sort keys of the same type.');
+
+    // Defer to the subclass implementation for ordering only if the names are
+    // identical (or both null).
+    if (name == other.name) {
+      return doCompare(other);
+    }
+
+    // Keys that don't have a name are sorted together and come before those with
+    // a name.
+    if (name == null && other.name != null) {
+      return -1;
+    } else if (name != null && other.name == null) {
+      return 1;
+    }
+
+    return name.compareTo(other.name);
   }
 
   /// The implementation of [compareTo].
@@ -4052,14 +4062,22 @@ abstract class SemanticsSortKey extends Diagnosticable implements Comparable<Sem
 /// The [OrdinalSortKey] compares itself with other [OrdinalSortKey]s
 /// to sort based on the order it is given.
 ///
-/// The ordinal value `order` is typically a whole number, though it can be
+/// [OrdinalSortKey]s are sorted by the optional [name], then by their [order].
+/// If [SemanticsProperties.sortKey] is a [OrdinalSortKey], then all the other
+/// specified sort keys in the same semantics group must also be
+/// [OrdinalSortKey]s.
+///
+/// Keys with no [name] are compared to other keys with no [name], and will
+/// be traversed before those with a [name].
+///
+/// The ordinal value [order] is typically a whole number, though it can be
 /// fractional, e.g. in order to fit between two other consecutive whole
 /// numbers. The value must be finite (it cannot be [double.nan],
 /// [double.infinity], or [double.negativeInfinity]).
 class OrdinalSortKey extends SemanticsSortKey {
-  /// Creates a semantics sort key that uses a [double] as its key value.
+  /// Creates a const semantics sort key that uses a [double] as its key value.
   ///
-  /// The [order] must be a finite number.
+  /// The [order] must be a finite number, and must not be null.
   const OrdinalSortKey(
     this.order, {
     String name,
@@ -4073,7 +4091,8 @@ class OrdinalSortKey extends SemanticsSortKey {
   /// the order in which this node is traversed by the platform's accessibility
   /// services.
   ///
-  /// Lower values will be traversed first.
+  /// Lower values will be traversed first. Keys with the same [name] will be
+  /// grouped together and sorted by name first, and then sorted by [order].
   final double order;
 
   @override

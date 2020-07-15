@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 
 import 'events.dart';
@@ -55,14 +57,19 @@ class PointerSignalResolver {
     try {
       _firstRegisteredCallback(_currentEvent);
     } catch (exception, stack) {
+      InformationCollector collector;
+      assert(() {
+        collector = () sync* {
+          yield DiagnosticsProperty<PointerSignalEvent>('Event', event, style: DiagnosticsTreeStyle.errorProperty);
+        };
+        return true;
+      }());
       FlutterError.reportError(FlutterErrorDetails(
         exception: exception,
         stack: stack,
         library: 'gesture library',
         context: ErrorDescription('while resolving a PointerSignalEvent'),
-        informationCollector: () sync* {
-          yield DiagnosticsProperty<PointerSignalEvent>('Event', event, style: DiagnosticsTreeStyle.errorProperty);
-        },
+        informationCollector: collector
       ));
     }
     _firstRegisteredCallback = null;

@@ -25,6 +25,7 @@ import 'finders.dart';
 import 'matchers.dart';
 import 'test_async_utils.dart';
 import 'test_compat.dart';
+import 'test_pointer.dart';
 import 'test_text_input.dart';
 
 /// Keep users from needing multiple imports to test semantics.
@@ -89,6 +90,9 @@ typedef WidgetTesterCallback = Future<void> Function(WidgetTester widgetTester);
 /// each value of the [TestVariant.values]. If [variant] is not set, the test
 /// will be run once using the base test environment.
 ///
+/// If the [tags] are passed, they declare user-defined tags that are implemented by
+/// the `test` package.
+///
 /// See also:
 ///
 ///  * [AutomatedTestWidgetsFlutterBinding.addTime] to learn more about
@@ -112,6 +116,7 @@ void testWidgets(
   Duration initialTimeout,
   bool semanticsEnabled = true,
   TestVariant<Object> variant = const DefaultTestVariant(),
+  dynamic tags,
 }) {
   assert(variant != null);
   assert(variant.values.isNotEmpty, 'There must be at least on value to test in the testing variant');
@@ -150,6 +155,7 @@ void testWidgets(
       },
       skip: skip,
       timeout: timeout ?? binding.defaultTestTimeout,
+      tags: tags,
     );
   }
 }
@@ -224,6 +230,22 @@ class TargetPlatformVariant extends TestVariant<TargetPlatform> {
   /// Creates a [TargetPlatformVariant] that tests all values from
   /// the [TargetPlatform] enum.
   TargetPlatformVariant.all() : values = TargetPlatform.values.toSet();
+
+  /// Creates a [TargetPlatformVariant] that includes platforms that are
+  /// considered desktop platforms.
+  TargetPlatformVariant.desktop() : values = <TargetPlatform>{
+    TargetPlatform.linux,
+    TargetPlatform.macOS,
+    TargetPlatform.windows,
+  };
+
+  /// Creates a [TargetPlatformVariant] that includes platforms that are
+  /// considered mobile platforms.
+  TargetPlatformVariant.mobile() : values = <TargetPlatform>{
+    TargetPlatform.android,
+    TargetPlatform.iOS,
+    TargetPlatform.fuchsia,
+  };
 
   /// Creates a [TargetPlatformVariant] that tests only the given value of
   /// [TargetPlatform].
@@ -442,6 +464,89 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
     });
   }
 
+  @override
+  Future<List<Duration>> handlePointerEventRecord(List<PointerEventRecord> records) {
+    assert(records != null);
+    assert(records.isNotEmpty);
+    return TestAsyncUtils.guard<List<Duration>>(() async {
+      // hitTestHistory is an equivalence of _hitTests in [GestureBinding]
+      final Map<int, HitTestResult> hitTestHistory = <int, HitTestResult>{};
+      final List<Duration> handleTimeStampDiff = <Duration>[];
+      DateTime startTime;
+      for (final PointerEventRecord record in records) {
+        final DateTime now = binding.clock.now();
+        startTime ??= now;
+        // So that the first event is promised to receive a zero timeDiff
+        final Duration timeDiff = record.timeDelay - now.difference(startTime);
+        if (timeDiff.isNegative) {
+          // Flush all past events
+          handleTimeStampDiff.add(timeDiff);
+          for (final PointerEvent event in record.events) {
+            _handlePointerEvent(event, hitTestHistory);
+          }
+        } else {
+          // TODO(CareF): reconsider the pumping strategy after
+          // https://github.com/flutter/flutter/issues/60739 is fixed
+          await binding.pump();
+          await binding.delayed(timeDiff);
+          handleTimeStampDiff.add(
+            record.timeDelay - binding.clock.now().difference(startTime),
+          );
+          for (final PointerEvent event in record.events) {
+            _handlePointerEvent(event, hitTestHistory);
+          }
+        }
+      }
+      await binding.pump();
+      // This makes sure that a gesture is completed, with no more pointers
+      // active.
+      assert(hitTestHistory.isEmpty);
+      return handleTimeStampDiff;
+    });
+  }
+
+  // This is a parallel implementation of [GestureBinding._handlePointerEvent]
+  // to make compatible with test bindings.
+  void _handlePointerEvent(
+    PointerEvent event,
+    Map<int, HitTestResult> _hitTests
+  ) {
+    HitTestResult hitTestResult;
+    if (event is PointerDownEvent || event is PointerSignalEvent) {
+      assert(!_hitTests.containsKey(event.pointer));
+      hitTestResult = HitTestResult();
+      binding.hitTest(hitTestResult, event.position);
+      if (event is PointerDownEvent) {
+        _hitTests[event.pointer] = hitTestResult;
+      }
+      assert(() {
+        if (debugPrintHitTestResults)
+          debugPrint('$event: $hitTestResult');
+        return true;
+      }());
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      hitTestResult = _hitTests.remove(event.pointer);
+    } else if (event.down) {
+      // Because events that occur with the pointer down (like
+      // PointerMoveEvents) should be dispatched to the same place that their
+      // initial PointerDownEvent was, we want to re-use the path we found when
+      // the pointer went down, rather than do hit detection each time we get
+      // such an event.
+      hitTestResult = _hitTests[event.pointer];
+    }
+    assert(() {
+      if (debugPrintMouseHoverEvents && event is PointerHoverEvent)
+        debugPrint('$event');
+      return true;
+    }());
+    if (hitTestResult != null ||
+        event is PointerHoverEvent ||
+        event is PointerAddedEvent ||
+        event is PointerRemovedEvent) {
+      binding.dispatchEvent(event, hitTestResult, source: TestBindingEventSource.test);
+    }
+  }
+
   /// Triggers a frame after `duration` amount of time.
   ///
   /// This makes the framework act as if the application had janked (missed
@@ -545,6 +650,29 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
     }).then<int>((_) => count);
   }
 
+  /// Repeatedly pump frames that render the `target` widget with a fixed time
+  /// `interval` as many as `maxDuration` allows.
+  ///
+  /// The `maxDuration` argument is required. The `interval` argument defaults to
+  /// 16.683 milliseconds (59.94 FPS).
+  Future<void> pumpFrames(
+    Widget target,
+    Duration maxDuration, [
+    Duration interval = const Duration(milliseconds: 16, microseconds: 683),
+  ]) {
+    assert(maxDuration != null);
+    // The interval following the last frame doesn't have to be within the fullDuration.
+    Duration elapsed = Duration.zero;
+    return TestAsyncUtils.guard<void>(() async {
+      binding.attachRootWidget(target);
+      binding.scheduleFrame();
+      while (elapsed < maxDuration) {
+        await binding.pump(interval);
+        elapsed += interval;
+      }
+    });
+  }
+
   /// Runs a [callback] that performs real asynchronous work.
   ///
   /// This is intended for callers who need to call asynchronous methods where
@@ -559,12 +687,24 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
   ///
   /// If [callback] completes with an error, the error will be caught by the
   /// Flutter framework and made available via [takeException], and this method
-  /// will return a future that completes will `null`.
+  /// will return a future that completes with `null`.
   ///
   /// Re-entrant calls to this method are not allowed; callers of this method
   /// are required to wait for the returned future to complete before calling
   /// this method again. Attempts to do otherwise will result in a
   /// [TestFailure] error being thrown.
+  ///
+  /// If your widget test hangs and you are using [runAsync], chances are your
+  /// code depends on the result of a task that did not complete. Fake async
+  /// environment is unable to resolve a future that was created in [runAsync].
+  /// If you observe such behavior or flakiness, you have a number of options:
+  ///
+  /// * Consider restructuring your code so you do not need [runAsync]. This is
+  ///   the optimal solution as widget tests are designed to run in fake async
+  ///   environment.
+  ///
+  /// * Expose a [Future] in your application code that signals the readiness of
+  ///   your widget tree, then await that future inside [callback].
   Future<T> runAsync<T>(
     Future<T> callback(), {
     Duration additionalTime = const Duration(milliseconds: 1000),
@@ -638,7 +778,7 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
         if (widget is Tooltip) {
           final Iterable<Element> matches = find.byTooltip(widget.message).evaluate();
           if (matches.length == 1) {
-            debugPrint('  find.byTooltip(\'${widget.message}\')');
+            debugPrint("  find.byTooltip('${widget.message}')");
             continue;
           }
         }
@@ -648,7 +788,7 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
           final Iterable<Element> matches = find.text(widget.data).evaluate();
           descendantText = widget.data;
           if (matches.length == 1) {
-            debugPrint('  find.text(\'${widget.data}\')');
+            debugPrint("  find.text('${widget.data}')");
             continue;
           }
         }
@@ -661,7 +801,7 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
               key is ValueKey<bool>) {
             keyLabel = 'const ${key.runtimeType}(${key.value})';
           } else if (key is ValueKey<String>) {
-            keyLabel = 'const Key(\'${key.value}\')';
+            keyLabel = "const Key('${key.value}')";
           }
           if (keyLabel != null) {
             final Iterable<Element> matches = find.byKey(key).evaluate();
@@ -685,7 +825,7 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
           if (descendantText != null && numberOfWithTexts < 5) {
             final Iterable<Element> matches = find.widgetWithText(widget.runtimeType, descendantText).evaluate();
             if (matches.length == 1) {
-              debugPrint('  find.widgetWithText(${widget.runtimeType}, \'$descendantText\')');
+              debugPrint("  find.widgetWithText(${widget.runtimeType}, '$descendantText')");
               numberOfWithTexts += 1;
               continue;
             }
@@ -780,8 +920,6 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
   void _verifySemanticsHandlesWereDisposed() {
     assert(_lastRecordedSemanticsHandles != null);
     if (binding.pipelineOwner.debugOutstandingSemanticsHandles > _lastRecordedSemanticsHandles) {
-      // TODO(jacobr): The hint for this one causes a change in line breaks but
-      // I think it is for the best.
       throw FlutterError.fromParts(<DiagnosticsNode>[
         ErrorSummary('A SemanticsHandle was active at the end of the test.'),
         ErrorDescription(
@@ -955,6 +1093,11 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
   /// The ancestor's semantic data will include the child's as well as
   /// other nodes that have been merged together.
   ///
+  /// If the [SemanticsNode] of the object identified by the finder is
+  /// force-merged into an ancestor (e.g. via the [MergeSemantics] widget)
+  /// the node into which it is merged is returned. That node will include
+  /// all the semantics information of the nodes merged into it.
+  ///
   /// Will throw a [StateError] if the finder returns more than one element or
   /// if no semantics are found or are not enabled.
   SemanticsNode getSemantics(Finder finder) {
@@ -970,7 +1113,7 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
     final Element element = candidates.single;
     RenderObject renderObject = element.findRenderObject();
     SemanticsNode result = renderObject.debugSemantics;
-    while (renderObject != null && result == null) {
+    while (renderObject != null && (result == null || result.isMergedIntoParent)) {
       renderObject = renderObject?.parent as RenderObject;
       result = renderObject?.debugSemantics;
     }

@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
+import 'dart:ui' as ui show BoxHeightStyle, BoxWidthStyle;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -196,10 +200,15 @@ class CupertinoTextField extends StatefulWidget {
   ///
   /// If specified, the [maxLength] property must be greater than zero.
   ///
+  /// The [selectionHeightStyle] and [selectionWidthStyle] properties allow
+  /// changing the shape of the selection highlighting. These properties default
+  /// to [ui.BoxHeightStyle.tight] and [ui.BoxWidthStyle.tight] respectively and
+  /// must not be null.
+  ///
   /// The [autocorrect], [autofocus], [clearButtonMode], [dragStartBehavior],
   /// [expands], [maxLengthEnforced], [obscureText], [prefixMode], [readOnly],
-  /// [scrollPadding], [suffixMode], [textAlign], and [enableSuggestions]
-  /// properties must not be null.
+  /// [scrollPadding], [suffixMode], [textAlign], [selectionHeightStyle],
+  /// [selectionWidthStyle], and [enableSuggestions] properties must not be null.
   ///
   /// See also:
   ///
@@ -234,6 +243,7 @@ class CupertinoTextField extends StatefulWidget {
     ToolbarOptions toolbarOptions,
     this.showCursor,
     this.autofocus = false,
+    this.obscuringCharacter = '•',
     this.obscureText = false,
     this.autocorrect = true,
     SmartDashesType smartDashesType,
@@ -252,6 +262,8 @@ class CupertinoTextField extends StatefulWidget {
     this.cursorWidth = 2.0,
     this.cursorRadius = const Radius.circular(2.0),
     this.cursorColor,
+    this.selectionHeightStyle = ui.BoxHeightStyle.tight,
+    this.selectionWidthStyle = ui.BoxWidthStyle.tight,
     this.keyboardAppearance,
     this.scrollPadding = const EdgeInsets.all(20.0),
     this.dragStartBehavior = DragStartBehavior.start,
@@ -259,9 +271,11 @@ class CupertinoTextField extends StatefulWidget {
     this.onTap,
     this.scrollController,
     this.scrollPhysics,
+    this.autofillHints,
   }) : assert(textAlign != null),
        assert(readOnly != null),
        assert(autofocus != null),
+       assert(obscuringCharacter != null && obscuringCharacter.length == 1),
        assert(obscureText != null),
        assert(autocorrect != null),
        smartDashesType = smartDashesType ?? (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
@@ -270,11 +284,13 @@ class CupertinoTextField extends StatefulWidget {
        assert(maxLengthEnforced != null),
        assert(scrollPadding != null),
        assert(dragStartBehavior != null),
+       assert(selectionHeightStyle != null),
+       assert(selectionWidthStyle != null),
        assert(maxLines == null || maxLines > 0),
        assert(minLines == null || minLines > 0),
        assert(
          (maxLines == null) || (minLines == null) || (maxLines >= minLines),
-         'minLines can\'t be greater than maxLines',
+         "minLines can't be greater than maxLines",
        ),
        assert(expands != null),
        assert(
@@ -286,6 +302,11 @@ class CupertinoTextField extends StatefulWidget {
        assert(clearButtonMode != null),
        assert(prefixMode != null),
        assert(suffixMode != null),
+       // Assert the following instead of setting it directly to avoid surprising the user by silently changing the value they set.
+       assert(!identical(textInputAction, TextInputAction.newline) ||
+         maxLines == 1 ||
+         !identical(keyboardType, TextInputType.text),
+         'Use keyboardType TextInputType.multiline when using TextInputAction.newline on a multiline TextField.'),
        keyboardType = keyboardType ?? (maxLines == 1 ? TextInputType.text : TextInputType.multiline),
        toolbarOptions = toolbarOptions ?? (obscureText ?
          const ToolbarOptions(
@@ -416,6 +437,9 @@ class CupertinoTextField extends StatefulWidget {
   /// {@macro flutter.widgets.editableText.autofocus}
   final bool autofocus;
 
+  /// {@macro flutter.widgets.editableText.obscuringCharacter}
+  final String obscuringCharacter;
+
   /// {@macro flutter.widgets.editableText.obscureText}
   final bool obscureText;
 
@@ -530,6 +554,16 @@ class CupertinoTextField extends StatefulWidget {
   /// and [CupertinoColors.activeOrange] in the dark theme.
   final Color cursorColor;
 
+  /// Controls how tall the selection highlight boxes are computed to be.
+  ///
+  /// See [ui.BoxHeightStyle] for details on available styles.
+  final ui.BoxHeightStyle selectionHeightStyle;
+
+  /// Controls how wide the selection highlight boxes are computed to be.
+  ///
+  /// See [ui.BoxWidthStyle] for details on available styles.
+  final ui.BoxWidthStyle selectionWidthStyle;
+
   /// The appearance of the keyboard.
   ///
   /// This setting is only honored on iOS devices.
@@ -558,6 +592,10 @@ class CupertinoTextField extends StatefulWidget {
   /// {@macro flutter.material.textfield.onTap}
   final GestureTapCallback onTap;
 
+  /// {@macro flutter.widgets.editableText.autofillHints}
+  /// {@macro flutter.services.autofill.autofillHints}
+  final Iterable<String> autofillHints;
+
   @override
   _CupertinoTextFieldState createState() => _CupertinoTextFieldState();
 
@@ -576,6 +614,7 @@ class CupertinoTextField extends StatefulWidget {
     properties.add(DiagnosticsProperty<TextInputType>('keyboardType', keyboardType, defaultValue: TextInputType.text));
     properties.add(DiagnosticsProperty<TextStyle>('style', style, defaultValue: null));
     properties.add(DiagnosticsProperty<bool>('autofocus', autofocus, defaultValue: false));
+    properties.add(DiagnosticsProperty<String>('obscuringCharacter', obscuringCharacter, defaultValue: '•'));
     properties.add(DiagnosticsProperty<bool>('obscureText', obscureText, defaultValue: false));
     properties.add(DiagnosticsProperty<bool>('autocorrect', autocorrect, defaultValue: true));
     properties.add(EnumProperty<SmartDashesType>('smartDashesType', smartDashesType, defaultValue: obscureText ? SmartDashesType.disabled : SmartDashesType.enabled));
@@ -847,7 +886,7 @@ class _CupertinoTextFieldState extends State<CupertinoTextField> with AutomaticK
 
     final TextStyle placeholderStyle = textStyle.merge(resolvedPlaceholderStyle);
 
-    final Brightness keyboardAppearance = widget.keyboardAppearance ?? themeData.brightness;
+    final Brightness keyboardAppearance = widget.keyboardAppearance ?? CupertinoTheme.brightnessOf(context);
     final Color cursorColor = CupertinoDynamicColor.resolve(widget.cursorColor, context) ?? themeData.primaryColor;
     final Color disabledColor = CupertinoDynamicColor.resolve(_kDisabledBackground, context);
 
@@ -876,6 +915,8 @@ class _CupertinoTextFieldState extends State<CupertinoTextField> with AutomaticK
       color: enabled ? decorationColor : (decorationColor ?? disabledColor),
     );
 
+    final Color selectionColor = CupertinoTheme.of(context).primaryColor.withOpacity(0.2);
+
     final Widget paddedEditable = Padding(
       padding: widget.padding,
       child: RepaintBoundary(
@@ -894,6 +935,7 @@ class _CupertinoTextFieldState extends State<CupertinoTextField> with AutomaticK
           strutStyle: widget.strutStyle,
           textAlign: widget.textAlign,
           autofocus: widget.autofocus,
+          obscuringCharacter: widget.obscuringCharacter,
           obscureText: widget.obscureText,
           autocorrect: widget.autocorrect,
           smartDashesType: widget.smartDashesType,
@@ -902,7 +944,7 @@ class _CupertinoTextFieldState extends State<CupertinoTextField> with AutomaticK
           maxLines: widget.maxLines,
           minLines: widget.minLines,
           expands: widget.expands,
-          selectionColor: CupertinoTheme.of(context).primaryColor.withOpacity(0.2),
+          selectionColor: selectionColor,
           selectionControls: widget.selectionEnabled
             ? cupertinoTextSelectionControls : null,
           onChanged: widget.onChanged,
@@ -917,13 +959,17 @@ class _CupertinoTextFieldState extends State<CupertinoTextField> with AutomaticK
           cursorOpacityAnimates: true,
           cursorOffset: cursorOffset,
           paintCursorAboveText: true,
+          autocorrectionTextRectColor: selectionColor,
           backgroundCursorColor: CupertinoDynamicColor.resolve(CupertinoColors.inactiveGray, context),
+          selectionHeightStyle: widget.selectionHeightStyle,
+          selectionWidthStyle: widget.selectionWidthStyle,
           scrollPadding: widget.scrollPadding,
           keyboardAppearance: keyboardAppearance,
           dragStartBehavior: widget.dragStartBehavior,
           scrollController: widget.scrollController,
           scrollPhysics: widget.scrollPhysics,
           enableInteractiveSelection: widget.enableInteractiveSelection,
+          autofillHints: widget.autofillHints,
         ),
       ),
     );

@@ -2,23 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 
-// Sets a platform override for desktop to avoid exceptions. See
-// https://flutter.dev/desktop#target-platform-override for more info.
-// TODO(gspencergoog): Remove once TargetPlatform includes all desktop platforms.
-void _enablePlatformOverrideForDesktop() {
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
-    debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
-  }
-}
-
 void main() {
-  _enablePlatformOverrideForDesktop();
   runApp(const MaterialApp(
     title: 'Hover Demo',
     home: HoverDemo(),
@@ -56,7 +44,7 @@ class _HoverDemoState extends State<HoverDemo> {
     final TextTheme textTheme = Theme.of(context).textTheme;
 
     return DefaultTextStyle(
-      style: textTheme.display1,
+      style: textTheme.headline4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Hover Demo'),

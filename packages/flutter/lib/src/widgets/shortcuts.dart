@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:collection';
 
-import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -77,14 +78,12 @@ class KeySet<T extends KeyboardKey> {
         assert(!keys.contains(null)),
         _keys = HashSet<T>.from(keys);
 
-  /// Returns an unmodifiable view of the [KeyboardKey]s in this [KeySet].
-  Set<T> get keys => UnmodifiableSetView<T>(_keys);
-  // This needs to be a hash set to be sure that the hashCode accessor returns
-  // consistent results. LinkedHashSet (the default Set implementation) depends
-  // upon insertion order, and HashSet does not.
+  /// Returns a copy of the [KeyboardKey]s in this [KeySet].
+  Set<T> get keys => _keys.toSet();
   final HashSet<T> _keys;
 
   @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes, to remove in NNBD with a late final hashcode
   bool operator ==(Object other) {
     if (other.runtimeType != runtimeType) {
       return false;
@@ -93,9 +92,59 @@ class KeySet<T extends KeyboardKey> {
         && setEquals<T>(other._keys, _keys);
   }
 
+  // Arrays used to temporarily store hash codes for sorting.
+  static final List<int> _tempHashStore3 = <int>[0, 0, 0]; // used to sort exactly 3 keys
+  static final List<int> _tempHashStore4 = <int>[0, 0, 0, 0]; // used to sort exactly 4 keys
+
+  // Cached hash code value. Improves [hashCode] performance by 27%-900%,
+  // depending on key set size and read/write ratio.
+  int _hashCode;
+
   @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes, to remove in NNBD with a late final hashcode
   int get hashCode {
-    return hashList(_keys);
+    // Return cached hash code if available.
+    if (_hashCode != null) {
+      return _hashCode;
+    }
+
+    // Compute order-independent hash and cache it.
+    final int length = _keys.length;
+    final Iterator<T> iterator = _keys.iterator;
+
+    // There's always at least one key. Just extract it.
+    iterator.moveNext();
+    final int h1 = iterator.current.hashCode;
+
+    if (length == 1) {
+      // Don't do anything fancy if there's exactly one key.
+      return _hashCode = h1;
+    }
+
+    iterator.moveNext();
+    final int h2 = iterator.current.hashCode;
+    if (length == 2) {
+      // No need to sort if there's two keys, just compare them.
+      return _hashCode = h1 < h2
+        ? hashValues(h1, h2)
+        : hashValues(h2, h1);
+    }
+
+    // Sort key hash codes and feed to hashList to ensure the aggregate
+    // hash code does not depend on the key order.
+    final List<int> sortedHashes = length == 3
+      ? _tempHashStore3
+      : _tempHashStore4;
+    sortedHashes[0] = h1;
+    sortedHashes[1] = h2;
+    iterator.moveNext();
+    sortedHashes[2] = iterator.current.hashCode;
+    if (length == 4) {
+      iterator.moveNext();
+      sortedHashes[3] = iterator.current.hashCode;
+    }
+    sortedHashes.sort();
+    return _hashCode = hashList(sortedHashes);
   }
 }
 
@@ -110,7 +159,7 @@ class KeySet<T extends KeyboardKey> {
 /// This is a thin wrapper around a [Set], but changes the equality comparison
 /// from an identity comparison to a contents comparison so that non-identical
 /// sets with the same keys in them will compare as equal.
-class LogicalKeySet extends KeySet<LogicalKeyboardKey> with DiagnosticableMixin {
+class LogicalKeySet extends KeySet<LogicalKeyboardKey> with Diagnosticable {
   /// A constructor for making a [LogicalKeySet] of up to four keys.
   ///
   /// If you need a set of more than four keys, use [LogicalKeySet.fromSet].
@@ -156,7 +205,7 @@ class LogicalKeySet extends KeySet<LogicalKeyboardKey> with DiagnosticableMixin 
           return a.debugName.compareTo(b.debugName);
         }
     );
-    return sortedKeys.map<String>((LogicalKeyboardKey key) => '${key.debugName}').join(' + ');
+    return sortedKeys.map<String>((LogicalKeyboardKey key) => key.debugName.toString()).join(' + ');
   }
 
   @override
@@ -201,7 +250,7 @@ class ShortcutMapProperty extends DiagnosticsProperty<Map<LogicalKeySet, Intent>
 ///
 /// A [ShortcutManager] is obtained by calling [Shortcuts.of] on the context of
 /// the widget that you want to find a manager for.
-class ShortcutManager extends ChangeNotifier with DiagnosticableMixin {
+class ShortcutManager extends ChangeNotifier with Diagnosticable {
   /// Constructs a [ShortcutManager].
   ///
   /// The [shortcuts] argument must not  be null.
@@ -227,6 +276,7 @@ class ShortcutManager extends ChangeNotifier with DiagnosticableMixin {
   Map<LogicalKeySet, Intent> get shortcuts => _shortcuts;
   Map<LogicalKeySet, Intent> _shortcuts;
   set shortcuts(Map<LogicalKeySet, Intent> value) {
+    assert(value != null);
     if (!mapEquals<LogicalKeySet, Intent>(_shortcuts, value)) {
       _shortcuts = value;
       notifyListeners();
@@ -238,6 +288,14 @@ class ShortcutManager extends ChangeNotifier with DiagnosticableMixin {
   /// The optional `keysPressed` argument provides an override to keys that the
   /// [RawKeyboard] reports. If not specified, uses [RawKeyboard.keysPressed]
   /// instead.
+  ///
+  /// If a key mapping is found, then the associated action will be invoked
+  /// using the [Intent] that the [LogicalKeySet] maps to, and the currently
+  /// focused widget's context (from [FocusManager.primaryFocus]).
+  ///
+  /// The object returned is the result of [Action.invoke] being called on the
+  /// [Action] bound to the [Intent] that the key press maps to, or null, if the
+  /// key press didn't match any intent.
   @protected
   bool handleKeypress(
     BuildContext context,
@@ -268,10 +326,9 @@ class ShortcutManager extends ChangeNotifier with DiagnosticableMixin {
     }
     if (matchedIntent != null) {
       final BuildContext primaryContext = primaryFocus?.context;
-      if (primaryContext == null) {
-        return false;
-      }
-      return Actions.invoke(primaryContext, matchedIntent, nullOk: true);
+      assert (primaryContext != null);
+      Actions.invoke(primaryContext, matchedIntent, nullOk: true);
+      return true;
     }
     return false;
   }
@@ -294,16 +351,18 @@ class ShortcutManager extends ChangeNotifier with DiagnosticableMixin {
 ///    invoked.
 ///  * [Action], a class for defining an invocation of a user action.
 class Shortcuts extends StatefulWidget {
-  /// Creates a ActionManager object.
+  /// Creates a const [Shortcuts] widget.
   ///
-  /// The [child] argument must not be null.
+  /// The [child] and [shortcuts] arguments are required and must not be null.
   const Shortcuts({
     Key key,
     this.manager,
-    this.shortcuts,
-    this.child,
+    @required this.shortcuts,
+    @required this.child,
     this.debugLabel,
-  }) : super(key: key);
+  }) : assert(shortcuts != null),
+       assert(child != null),
+       super(key: key);
 
   /// The [ShortcutManager] that will manage the mapping between key
   /// combinations and [Action]s.

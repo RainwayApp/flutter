@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:collection';
 import 'dart:math' as math;
 
@@ -76,7 +78,7 @@ abstract class TableColumnWidth {
   double flex(Iterable<RenderBox> cells) => null;
 
   @override
-  String toString() => '${objectRuntimeType(this, 'TableColumnWidth')}';
+  String toString() => objectRuntimeType(this, 'TableColumnWidth');
 }
 
 /// Sizes the column according to the intrinsic dimensions of all the
@@ -91,6 +93,11 @@ class IntrinsicColumnWidth extends TableColumnWidth {
   /// Creates a column width based on intrinsic sizing.
   ///
   /// This sizing algorithm is very expensive.
+  ///
+  /// The `flex` argument specifies the flex factor to apply to the column if
+  /// there is any room left over when laying out the table. If `flex` is
+  /// null (the default), the table will not distribute any extra space to the
+  /// column.
   const IntrinsicColumnWidth({ double flex }) : _flex = flex;
 
   @override
@@ -992,6 +999,7 @@ class RenderTable extends RenderBox {
 
   @override
   void performLayout() {
+    final BoxConstraints constraints = this.constraints;
     final int rows = this.rows;
     final int columns = this.columns;
     assert(_children.length == rows * columns);

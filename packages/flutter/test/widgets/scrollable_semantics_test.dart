@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -253,7 +255,7 @@ void main() {
     ));
 
     semantics.dispose();
-  }, skip: isBrowser);
+  });
 
   testWidgets('correct scrollProgress for unbound', (WidgetTester tester) async {
     semantics = SemanticsTester(tester);

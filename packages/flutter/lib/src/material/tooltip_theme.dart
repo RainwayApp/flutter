@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
@@ -23,7 +25,8 @@ import 'theme.dart';
 ///    subtree.
 ///  * [TooltipThemeData], which describes the actual configuration of a
 ///    tooltip theme.
-class TooltipThemeData extends Diagnosticable {
+@immutable
+class TooltipThemeData with Diagnosticable {
   /// Creates the set of properties used to configure [Tooltip]s.
   const TooltipThemeData({
     this.height,

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -71,12 +73,13 @@ class SliverGridGeometry {
 
   @override
   String toString() {
-    return 'SliverGridGeometry('
-      'scrollOffset: $scrollOffset, '
-      'crossAxisOffset: $crossAxisOffset, '
-      'mainAxisExtent: $mainAxisExtent, '
-      'crossAxisExtent: $crossAxisExtent'
-    ')';
+    final List<String> properties = <String>[
+      'scrollOffset: $scrollOffset',
+      'crossAxisOffset: $crossAxisOffset',
+      'mainAxisExtent: $mainAxisExtent',
+      'crossAxisExtent: $crossAxisExtent',
+    ];
+    return 'SliverGridGeometry(${properties.join(', ')})';
   }
 }
 
@@ -411,7 +414,8 @@ class SliverGridDelegateWithMaxCrossAxisExtent extends SliverGridDelegate {
   /// The ratio of the cross-axis to the main-axis extent of each child.
   final double childAspectRatio;
 
-  bool _debugAssertIsValid() {
+  bool _debugAssertIsValid(double crossAxisExtent) {
+    assert(crossAxisExtent > 0.0);
     assert(maxCrossAxisExtent > 0.0);
     assert(mainAxisSpacing >= 0.0);
     assert(crossAxisSpacing >= 0.0);
@@ -421,7 +425,7 @@ class SliverGridDelegateWithMaxCrossAxisExtent extends SliverGridDelegate {
 
   @override
   SliverGridLayout getLayout(SliverConstraints constraints) {
-    assert(_debugAssertIsValid());
+    assert(_debugAssertIsValid(constraints.crossAxisExtent));
     final int crossAxisCount = (constraints.crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing)).ceil();
     final double usableCrossAxisExtent = constraints.crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1);
     final double childCrossAxisExtent = usableCrossAxisExtent / crossAxisCount;
@@ -510,6 +514,7 @@ class RenderSliverGrid extends RenderSliverMultiBoxAdaptor {
 
   @override
   void performLayout() {
+    final SliverConstraints constraints = this.constraints;
     childManager.didStartLayout();
     childManager.setDidUnderflow(false);
 

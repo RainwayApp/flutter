@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +13,7 @@ import 'package:flutter/widgets.dart';
 
 import 'constants.dart';
 import 'debug.dart';
+import 'material_state.dart';
 import 'theme.dart';
 import 'theme_data.dart';
 import 'toggleable.dart';
@@ -60,6 +63,7 @@ class Checkbox extends StatefulWidget {
     @required this.value,
     this.tristate = false,
     @required this.onChanged,
+    this.mouseCursor,
     this.activeColor,
     this.checkColor,
     this.focusColor,
@@ -106,6 +110,23 @@ class Checkbox extends StatefulWidget {
   /// )
   /// ```
   final ValueChanged<bool> onChanged;
+
+  /// The cursor for a mouse pointer when it enters or is hovering over the
+  /// widget.
+  ///
+  /// If [mouseCursor] is a [MaterialStateProperty<MouseCursor>],
+  /// [MaterialStateProperty.resolve] is used for the following [MaterialState]s:
+  ///
+  ///  * [MaterialState.selected].
+  ///  * [MaterialState.hovered].
+  ///  * [MaterialState.focused].
+  ///  * [MaterialState.disabled].
+  ///
+  /// When [value] is null and [tristate] is true, [MaterialState.selected] is
+  /// included as a state.
+  ///
+  /// If this property is null, [MaterialStateMouseCursor.clickable] will be used.
+  final MouseCursor mouseCursor;
 
   /// The color to use when this checkbox is checked.
   ///
@@ -169,17 +190,17 @@ class Checkbox extends StatefulWidget {
 
 class _CheckboxState extends State<Checkbox> with TickerProviderStateMixin {
   bool get enabled => widget.onChanged != null;
-  Map<LocalKey, ActionFactory> _actionMap;
+  Map<Type, Action<Intent>> _actionMap;
 
   @override
   void initState() {
     super.initState();
-    _actionMap = <LocalKey, ActionFactory>{
-      ActivateAction.key: _createAction,
+    _actionMap = <Type, Action<Intent>>{
+      ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: _actionHandler),
     };
   }
 
-  void _actionHandler(FocusNode node, Intent intent){
+  void _actionHandler(ActivateIntent intent) {
     if (widget.onChanged != null) {
       switch (widget.value) {
         case false:
@@ -193,15 +214,8 @@ class _CheckboxState extends State<Checkbox> with TickerProviderStateMixin {
           break;
       }
     }
-    final RenderObject renderObject = node.context.findRenderObject();
+    final RenderObject renderObject = context.findRenderObject();
     renderObject.sendSemanticsEvent(const TapSemanticEvent());
-  }
-
-  Action _createAction() {
-    return CallbackAction(
-      ActivateAction.key,
-      onInvoke: _actionHandler,
-    );
   }
 
   bool _focused = false;
@@ -233,6 +247,16 @@ class _CheckboxState extends State<Checkbox> with TickerProviderStateMixin {
     }
     size += (widget.visualDensity ?? themeData.visualDensity).baseSizeAdjustment;
     final BoxConstraints additionalConstraints = BoxConstraints.tight(size);
+    final MouseCursor effectiveMouseCursor = MaterialStateProperty.resolveAs<MouseCursor>(
+      widget.mouseCursor ?? MaterialStateMouseCursor.clickable,
+      <MaterialState>{
+        if (!enabled) MaterialState.disabled,
+        if (_hovering) MaterialState.hovered,
+        if (_focused) MaterialState.focused,
+        if (widget.tristate || widget.value) MaterialState.selected,
+      },
+    );
+
     return FocusableActionDetector(
       actions: _actionMap,
       focusNode: widget.focusNode,
@@ -240,6 +264,7 @@ class _CheckboxState extends State<Checkbox> with TickerProviderStateMixin {
       enabled: enabled,
       onShowFocusHighlight: _handleFocusHighlightChanged,
       onShowHoverHighlight: _handleHoverChanged,
+      mouseCursor: effectiveMouseCursor,
       child: Builder(
         builder: (BuildContext context) {
           return _CheckboxRenderObjectWidget(
@@ -316,8 +341,10 @@ class _CheckboxRenderObjectWidget extends LeafRenderObjectWidget {
   @override
   void updateRenderObject(BuildContext context, _RenderCheckbox renderObject) {
     renderObject
-      ..value = value
+      // The `tristate` must be changed before `value` due to the assertion at
+      // the beginning of `set value`.
       ..tristate = tristate
+      ..value = value
       ..activeColor = activeColor
       ..checkColor = checkColor
       ..inactiveColor = inactiveColor

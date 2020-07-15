@@ -41,7 +41,7 @@ void main() {
     });
 
     testWidgets('returns immediately when transient callback queue is empty', (WidgetTester tester) async {
-      extension.call(const WaitUntilNoTransientCallbacks().serialize()) // ignore: deprecated_member_use_from_same_package
+      extension.call(const WaitUntilNoTransientCallbacks().serialize())
           .then<void>(expectAsync1((Map<String, dynamic> r) {
         result = r;
       }));
@@ -61,7 +61,7 @@ void main() {
         // Intentionally blank. We only care about existence of a callback.
       });
 
-      extension.call(const WaitUntilNoTransientCallbacks().serialize()) // ignore: deprecated_member_use_from_same_package
+      extension.call(const WaitUntilNoTransientCallbacks().serialize())
           .then<void>(expectAsync1((Map<String, dynamic> r) {
         result = r;
       }));
@@ -260,7 +260,7 @@ void main() {
     });
 
     testWidgets(
-        'waiting for NoPendingPlatformMessages returns immediately when there\'re no platform messages', (WidgetTester tester) async {
+        "waiting for NoPendingPlatformMessages returns immediately when there're no platform messages", (WidgetTester tester) async {
       extension
           .call(const WaitForCondition(NoPendingPlatformMessages()).serialize())
           .then<void>(expectAsync1((Map<String, dynamic> r) {
@@ -563,35 +563,36 @@ void main() {
                 children: <Widget>[
                   const Text('Hello1', key: ValueKey<String>('text1')),
                   Container(
-                      height: 25.0,
-                      child: RichText(
-                          key: const ValueKey<String>('text2'),
-                          text: const TextSpan(text: 'Hello2')
-                      )
+                    height: 25.0,
+                    child: RichText(
+                      key: const ValueKey<String>('text2'),
+                      text: const TextSpan(text: 'Hello2'),
+                    ),
                   ),
                   Container(
-                      height: 25.0,
-                      child: EditableText(
-                          key: const ValueKey<String>('text3'),
-                          controller: TextEditingController(text: 'Hello3'),
-                          focusNode: FocusNode(),
-                          style: const TextStyle(),
-                          cursorColor: Colors.red,
-                          backgroundCursorColor: Colors.black)
+                    height: 25.0,
+                    child: EditableText(
+                      key: const ValueKey<String>('text3'),
+                      controller: TextEditingController(text: 'Hello3'),
+                      focusNode: FocusNode(),
+                      style: const TextStyle(),
+                      cursorColor: Colors.red,
+                      backgroundCursorColor: Colors.black,
+                    ),
                   ),
                   Container(
-                      height: 25.0,
-                      child: TextField(
-                          key: const ValueKey<String>('text4'),
-                          controller: TextEditingController(text: 'Hello4')
-                      )
+                    height: 25.0,
+                    child: TextField(
+                      key: const ValueKey<String>('text4'),
+                      controller: TextEditingController(text: 'Hello4'),
+                    ),
                   ),
                   Container(
-                      height: 25.0,
-                      child: TextFormField(
-                          key: const ValueKey<String>('text5'),
-                          controller: TextEditingController(text: 'Hello5')
-                      )
+                    height: 25.0,
+                    child: TextFormField(
+                      key: const ValueKey<String>('text5'),
+                      controller: TextEditingController(text: 'Hello5'),
+                    ),
                   ),
                 ],
               ))
@@ -887,7 +888,7 @@ void main() {
 
     testWidgets('returns immediately when frame is synced', (
         WidgetTester tester) async {
-      extension.call(const WaitUntilNoPendingFrame().serialize()) // ignore: deprecated_member_use_from_same_package
+      extension.call(const WaitUntilNoPendingFrame().serialize())
           .then<void>(expectAsync1((Map<String, dynamic> r) {
         result = r;
       }));
@@ -908,7 +909,7 @@ void main() {
         // Intentionally blank. We only care about existence of a callback.
       });
 
-      extension.call(const WaitUntilNoPendingFrame().serialize()) // ignore: deprecated_member_use_from_same_package
+      extension.call(const WaitUntilNoPendingFrame().serialize())
           .then<void>(expectAsync1((Map<String, dynamic> r) {
         result = r;
       }));
@@ -932,7 +933,7 @@ void main() {
         'waits until no pending scheduled frame', (WidgetTester tester) async {
       SchedulerBinding.instance.scheduleFrame();
 
-      extension.call(const WaitUntilNoPendingFrame().serialize()) // ignore: deprecated_member_use_from_same_package
+      extension.call(const WaitUntilNoPendingFrame().serialize())
           .then<void>(expectAsync1((Map<String, dynamic> r) {
         result = r;
       }));

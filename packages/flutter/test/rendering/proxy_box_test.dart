@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
+import 'dart:collection' show LinkedHashMap;
 import 'dart:typed_data';
 import 'dart:ui' as ui show Gradient, Image, ImageFilter;
 
@@ -81,21 +84,25 @@ void main() {
   });
 
   test('RenderPhysicalModel compositing on non-Fuchsia', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    for (final TargetPlatform platform in TargetPlatform.values) {
+      if (platform == TargetPlatform.fuchsia) {
+        continue;
+      }
+      debugDefaultTargetPlatformOverride = platform;
 
-    final RenderPhysicalModel root = RenderPhysicalModel(color: const Color(0xffff00ff));
-    layout(root, phase: EnginePhase.composite);
-    expect(root.needsCompositing, isTrue);
+      final RenderPhysicalModel root = RenderPhysicalModel(color: const Color(0xffff00ff));
+      layout(root, phase: EnginePhase.composite);
+      expect(root.needsCompositing, isTrue);
 
-    // Flutter now composites physical shapes on all platforms.
-    root.elevation = 1.0;
-    pumpFrame(phase: EnginePhase.composite);
-    expect(root.needsCompositing, isTrue);
+      // Flutter now composites physical shapes on all platforms.
+      root.elevation = 1.0;
+      pumpFrame(phase: EnginePhase.composite);
+      expect(root.needsCompositing, isTrue);
 
-    root.elevation = 0.0;
-    pumpFrame(phase: EnginePhase.composite);
-    expect(root.needsCompositing, isTrue);
-
+      root.elevation = 0.0;
+      pumpFrame(phase: EnginePhase.composite);
+      expect(root.needsCompositing, isTrue);
+    }
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -121,44 +128,53 @@ void main() {
   });
 
   group('RenderPhysicalShape', () {
-    setUp(() {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    });
-
     test('shape change triggers repaint', () {
-      final RenderPhysicalShape root = RenderPhysicalShape(
-        color: const Color(0xffff00ff),
-        clipper: const ShapeBorderClipper(shape: CircleBorder()),
-      );
-      layout(root, phase: EnginePhase.composite);
-      expect(root.debugNeedsPaint, isFalse);
+      for (final TargetPlatform platform in TargetPlatform.values) {
+        if (platform == TargetPlatform.fuchsia) {
+          continue;
+        }
+        debugDefaultTargetPlatformOverride = platform;
 
-      // Same shape, no repaint.
-      root.clipper = const ShapeBorderClipper(shape: CircleBorder());
-      expect(root.debugNeedsPaint, isFalse);
+        final RenderPhysicalShape root = RenderPhysicalShape(
+          color: const Color(0xffff00ff),
+          clipper: const ShapeBorderClipper(shape: CircleBorder()),
+        );
+        layout(root, phase: EnginePhase.composite);
+        expect(root.debugNeedsPaint, isFalse);
 
-      // Different shape triggers repaint.
-      root.clipper = const ShapeBorderClipper(shape: StadiumBorder());
-      expect(root.debugNeedsPaint, isTrue);
+        // Same shape, no repaint.
+        root.clipper = const ShapeBorderClipper(shape: CircleBorder());
+        expect(root.debugNeedsPaint, isFalse);
+
+        // Different shape triggers repaint.
+        root.clipper = const ShapeBorderClipper(shape: StadiumBorder());
+        expect(root.debugNeedsPaint, isTrue);
+      }
+      debugDefaultTargetPlatformOverride = null;
     });
 
     test('compositing on non-Fuchsia', () {
-      final RenderPhysicalShape root = RenderPhysicalShape(
-        color: const Color(0xffff00ff),
-        clipper: const ShapeBorderClipper(shape: CircleBorder()),
-      );
-      layout(root, phase: EnginePhase.composite);
-      expect(root.needsCompositing, isTrue);
+      for (final TargetPlatform platform in TargetPlatform.values) {
+        if (platform == TargetPlatform.fuchsia) {
+          continue;
+        }
+        debugDefaultTargetPlatformOverride = platform;
+        final RenderPhysicalShape root = RenderPhysicalShape(
+          color: const Color(0xffff00ff),
+          clipper: const ShapeBorderClipper(shape: CircleBorder()),
+        );
+        layout(root, phase: EnginePhase.composite);
+        expect(root.needsCompositing, isTrue);
 
-      // On non-Fuchsia platforms, we composite physical shape layers
-      root.elevation = 1.0;
-      pumpFrame(phase: EnginePhase.composite);
-      expect(root.needsCompositing, isTrue);
+        // On non-Fuchsia platforms, we composite physical shape layers
+        root.elevation = 1.0;
+        pumpFrame(phase: EnginePhase.composite);
+        expect(root.needsCompositing, isTrue);
 
-      root.elevation = 0.0;
-      pumpFrame(phase: EnginePhase.composite);
-      expect(root.needsCompositing, isTrue);
-
+        root.elevation = 0.0;
+        pumpFrame(phase: EnginePhase.composite);
+        expect(root.needsCompositing, isTrue);
+      }
       debugDefaultTargetPlatformOverride = null;
     });
   });
@@ -245,7 +261,7 @@ void main() {
     expect(getPixel(20, 20), equals(0x00000080));
     expect(getPixel(image.width - 1, 0), equals(0x00000000));
     expect(getPixel(image.width - 1, 20), equals(0xffffffff));
-  }, skip: isBrowser);
+  }, skip: isBrowser); // https://github.com/flutter/flutter/issues/42767
 
   test('RenderOpacity does not composite if it is transparent', () {
     final RenderOpacity renderOpacity = RenderOpacity(
@@ -418,6 +434,7 @@ void main() {
     _testLayerReuse<ClipRectLayer>(RenderFittedBox(
       alignment: Alignment.center,
       fit: BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
       // Inject opacity under the clip to force compositing.
       child: RenderOpacity(
         opacity: 0.5,
@@ -453,6 +470,105 @@ void main() {
     _testFittedBoxWithTransformLayer();
     // transform -> clip
     _testFittedBoxWithClipRectLayer();
+  });
+
+  test('RenderFittedBox respects clipBehavior', () {
+    const BoxConstraints viewport = BoxConstraints(maxHeight: 100.0, maxWidth: 100.0);
+    final TestClipPaintingContext context = TestClipPaintingContext();
+
+    // By default, clipBehavior should be Clip.none
+    final RenderFittedBox defaultBox = RenderFittedBox(child: box200x200, fit: BoxFit.none);
+    layout(defaultBox, constraints: viewport, phase: EnginePhase.composite, onErrors: expectOverflowedErrors);
+    defaultBox.paint(context, Offset.zero);
+    expect(context.clipBehavior, equals(Clip.none));
+
+    for (final Clip clip in Clip.values) {
+      final RenderFittedBox box = RenderFittedBox(child: box200x200, fit: BoxFit.none, clipBehavior: clip);
+      layout(box, constraints: viewport, phase: EnginePhase.composite, onErrors: expectOverflowedErrors);
+      box.paint(context, Offset.zero);
+      expect(context.clipBehavior, equals(clip));
+    }
+  });
+
+  test('RenderMouseRegion can change properties when detached', () {
+    renderer.initMouseTracker(MouseTracker(
+      renderer.pointerRouter,
+      (_) => <MouseTrackerAnnotation, Matrix4>{} as LinkedHashMap<MouseTrackerAnnotation, Matrix4>,
+    ));
+    final RenderMouseRegion object = RenderMouseRegion();
+    object
+      ..opaque = false
+      ..onEnter = (_) {}
+      ..onExit = (_) {}
+      ..onHover = (_) {};
+    // Passes if no error is thrown
+  });
+
+  test('RenderFractionalTranslation updates its semantics after its translation value is set', () {
+    final _TestSemanticsUpdateRenderFractionalTranslation box = _TestSemanticsUpdateRenderFractionalTranslation(
+      translation: const Offset(0.5, 0.5),
+    );
+    layout(box, constraints: BoxConstraints.tight(const Size(200.0, 200.0)));
+    expect(box.markNeedsSemanticsUpdateCallCount, 1);
+    box.translation = const Offset(0.4, 0.4);
+    expect(box.markNeedsSemanticsUpdateCallCount, 2);
+    box.translation = const Offset(0.3, 0.3);
+    expect(box.markNeedsSemanticsUpdateCallCount, 3);
+  });
+
+  test('RenderFollowerLayer hit test without a leader layer and the showWhenUnlinked is true', () {
+    final RenderFollowerLayer follower = RenderFollowerLayer(
+      link: LayerLink(),
+      showWhenUnlinked: true,
+      child: RenderSizedBox(const Size(1.0, 1.0)),
+    );
+    layout(follower, constraints: BoxConstraints.tight(const Size(200.0, 200.0)));
+    final BoxHitTestResult hitTestResult = BoxHitTestResult();
+    expect(follower.hitTest(hitTestResult, position: const Offset(0.0, 0.0)), isTrue);
+  });
+
+  test('RenderFollowerLayer hit test without a leader layer and the showWhenUnlinked is false', () {
+    final RenderFollowerLayer follower = RenderFollowerLayer(
+      link: LayerLink(),
+      showWhenUnlinked: false,
+      child: RenderSizedBox(const Size(1.0, 1.0)),
+    );
+    layout(follower, constraints: BoxConstraints.tight(const Size(200.0, 200.0)));
+    final BoxHitTestResult hitTestResult = BoxHitTestResult();
+    expect(follower.hitTest(hitTestResult, position: const Offset(0.0, 0.0)), isFalse);
+  });
+
+  test('RenderFollowerLayer hit test with a leader layer and the showWhenUnlinked is true', () {
+    // Creates a layer link with a leader.
+    final LayerLink link = LayerLink();
+    final LeaderLayer leader = LeaderLayer(link: link);
+    leader.attach(Object());
+
+    final RenderFollowerLayer follower = RenderFollowerLayer(
+      link: link,
+      showWhenUnlinked: true,
+      child: RenderSizedBox(const Size(1.0, 1.0)),
+    );
+    layout(follower, constraints: BoxConstraints.tight(const Size(200.0, 200.0)));
+    final BoxHitTestResult hitTestResult = BoxHitTestResult();
+    expect(follower.hitTest(hitTestResult, position: const Offset(0.0, 0.0)), isTrue);
+  });
+
+  test('RenderFollowerLayer hit test with a leader layer and the showWhenUnlinked is false', () {
+    // Creates a layer link with a leader.
+    final LayerLink link = LayerLink();
+    final LeaderLayer leader = LeaderLayer(link: link);
+    leader.attach(Object());
+
+    final RenderFollowerLayer follower = RenderFollowerLayer(
+      link: link,
+      showWhenUnlinked: false,
+      child: RenderSizedBox(const Size(1.0, 1.0)),
+    );
+    layout(follower, constraints: BoxConstraints.tight(const Size(200.0, 200.0)));
+    final BoxHitTestResult hitTestResult = BoxHitTestResult();
+    // The follower is still hit testable because there is a leader layer.
+    expect(follower.hitTest(hitTestResult, position: const Offset(0.0, 0.0)), isTrue);
   });
 }
 
@@ -509,4 +625,19 @@ class _TestPathClipper extends CustomClipper<Path> {
   }
   @override
   bool shouldReclip(_TestPathClipper oldClipper) => false;
+}
+
+class _TestSemanticsUpdateRenderFractionalTranslation extends RenderFractionalTranslation {
+  _TestSemanticsUpdateRenderFractionalTranslation({
+    @required Offset translation,
+    RenderBox child,
+  }) : super(translation: translation, child: child);
+
+  int markNeedsSemanticsUpdateCallCount = 0;
+
+  @override
+  void markNeedsSemanticsUpdate() {
+    markNeedsSemanticsUpdateCallCount++;
+    super.markNeedsSemanticsUpdate();
+  }
 }

@@ -58,20 +58,19 @@ class MDnsObservatoryDiscovery {
     try {
       await client.start();
       final List<PtrResourceRecord> pointerRecords = await client
-          .lookup<PtrResourceRecord>(
-            ResourceRecordQuery.serverPointer(dartObservatoryName),
-          )
-          .toList();
+        .lookup<PtrResourceRecord>(
+          ResourceRecordQuery.serverPointer(dartObservatoryName),
+        )
+        .toList();
       if (pointerRecords.isEmpty) {
-        globals. printTrace('No pointer records found.');
+        globals.printTrace('No pointer records found.');
         return null;
       }
       // We have no guarantee that we won't get multiple hits from the same
       // service on this.
-      final List<String> uniqueDomainNames = pointerRecords
-          .map<String>((PtrResourceRecord record) => record.domainName)
-          .toSet()
-          .toList();
+      final Set<String> uniqueDomainNames = pointerRecords
+        .map<String>((PtrResourceRecord record) => record.domainName)
+        .toSet();
 
       String domainName;
       if (applicationId != null) {
@@ -99,10 +98,10 @@ class MDnsObservatoryDiscovery {
       globals.printTrace('Checking for available port on $domainName');
       // Here, if we get more than one, it should just be a duplicate.
       final List<SrvResourceRecord> srv = await client
-          .lookup<SrvResourceRecord>(
-            ResourceRecordQuery.service(domainName),
-          )
-          .toList();
+        .lookup<SrvResourceRecord>(
+          ResourceRecordQuery.service(domainName),
+        )
+        .toList();
       if (srv.isEmpty) {
         return null;
       }
@@ -190,12 +189,12 @@ class MDnsObservatoryDiscovery {
     final TargetPlatform targetPlatform = await device.targetPlatform;
     switch (targetPlatform) {
       case TargetPlatform.ios:
-        UsageEvent('ios-mdns', 'no-ipv4-link-local').send();
+        UsageEvent('ios-mdns', 'no-ipv4-link-local', flutterUsage: globals.flutterUsage).send();
         globals.printError(
           'The mDNS query for an attached iOS device failed. It may '
           'be necessary to disable the "Personal Hotspot" on the device, and '
           'to ensure that the "Disable unless needed" setting is unchecked '
-          'under System Preferences > Network > iPhone USB.'
+          'under System Preferences > Network > iPhone USB. '
           'See https://github.com/flutter/flutter/issues/46698 for details.'
         );
         break;

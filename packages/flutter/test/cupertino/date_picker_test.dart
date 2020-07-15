@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -934,6 +936,39 @@ void main() {
         tester.getTopLeft(find.text('28')).dy,
       );
     });
+
+    testWidgets(
+      'date picker should only take into account the date part of minimumDate and maximumDate',
+      (WidgetTester tester) async {
+        // Regression test for https://github.com/flutter/flutter/issues/49606.
+        DateTime date;
+        final DateTime minDate = DateTime(2020, 1, 1, 12);
+        await tester.pumpWidget(
+          CupertinoApp(
+            home: Center(
+              child: SizedBox(
+                height: 400.0,
+                width: 400.0,
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  minimumDate: minDate,
+                  onDateTimeChanged: (DateTime newDate) { date = newDate; },
+                  initialDateTime: DateTime(2020, 1, 12),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // Scroll to 2019.
+        await tester.drag(find.text('2020'), const Offset(0.0, 32.0), touchSlopY: 0.0);
+        await tester.pump();
+        await tester.pumpAndSettle();
+        expect(date.year, minDate.year);
+        expect(date.month, minDate.month);
+        expect(date.day, minDate.day);
+    });
+
 
     group('Picker handles initial noon/midnight times', () {
       testWidgets('midnight', (WidgetTester tester) async {

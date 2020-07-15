@@ -6,13 +6,14 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/base/context.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/terminal.dart';
 import 'package:flutter_tools/src/cache.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/runner/flutter_command.dart';
 import 'package:flutter_tools/src/runner/flutter_command_runner.dart';
 import 'package:flutter_tools/src/version.dart';
 import 'package:mockito/mockito.dart';
-import 'package:platform/platform.dart';
 import 'package:process/process.dart';
 
 import '../../src/common.dart';
@@ -56,7 +57,7 @@ void main() {
 
     group('run', () {
       testUsingContext('checks that Flutter installation is up-to-date', () async {
-        final MockFlutterVersion version = FlutterVersion.instance as MockFlutterVersion;
+        final MockFlutterVersion version = globals.flutterVersion as MockFlutterVersion;
         bool versionChecked = false;
         when(version.checkFlutterVersionFreshness()).thenAnswer((_) async {
           versionChecked = true;
@@ -71,8 +72,36 @@ void main() {
         Platform: () => platform,
       }, initializeFlutterRoot: false);
 
+      testUsingContext('does not check that Flutter installation is up-to-date with --machine flag', () async {
+        final MockFlutterVersion version = globals.flutterVersion as MockFlutterVersion;
+        bool versionChecked = false;
+        when(version.checkFlutterVersionFreshness()).thenAnswer((_) async {
+          versionChecked = true;
+        });
+
+        await runner.run(<String>['dummy', '--machine', '--version']);
+
+        expect(versionChecked, isFalse);
+      }, overrides: <Type, Generator>{
+        FileSystem: () => fs,
+        ProcessManager: () => FakeProcessManager.any(),
+        Platform: () => platform,
+      }, initializeFlutterRoot: false);
+
+      testUsingContext('Fetches tags when --version is used', () async {
+        final MockFlutterVersion version = globals.flutterVersion as MockFlutterVersion;
+
+        await runner.run(<String>['--version']);
+
+        verify(version.fetchTagsAndUpdate()).called(1);
+      }, overrides: <Type, Generator>{
+        FileSystem: () => fs,
+        ProcessManager: () => FakeProcessManager.any(),
+        Platform: () => platform,
+      }, initializeFlutterRoot: false);
+
       testUsingContext('throw tool exit if the version file cannot be written', () async {
-        final MockFlutterVersion version = FlutterVersion.instance as MockFlutterVersion;
+        final MockFlutterVersion version = globals.flutterVersion as MockFlutterVersion;
         when(version.ensureVersionFile()).thenThrow(const FileSystemException());
 
         expect(() async => await runner.run(<String>['dummy']), throwsToolExit());
@@ -87,11 +116,13 @@ void main() {
         fs.directory('$_kArbitraryEngineRoot/src/out/ios_debug/gen/dart-pkg/sky_engine/lib/').createSync(recursive: true);
         fs.directory('$_kArbitraryEngineRoot/src/out/host_debug').createSync(recursive: true);
         fs.file(_kDotPackages).writeAsStringSync('sky_engine:file://$_kArbitraryEngineRoot/src/out/ios_debug/gen/dart-pkg/sky_engine/lib/');
+
         await runner.run(<String>['dummy', '--local-engine=ios_debug']);
 
         // Verify that this also works if the sky_engine path is a symlink to the engine root.
-        fs.link('/symlink').createSync('$_kArbitraryEngineRoot');
+        fs.link('/symlink').createSync(_kArbitraryEngineRoot);
         fs.file(_kDotPackages).writeAsStringSync('sky_engine:file:///symlink/src/out/ios_debug/gen/dart-pkg/sky_engine/lib/');
+
         await runner.run(<String>['dummy', '--local-engine=ios_debug']);
       }, overrides: <Type, Generator>{
         FileSystem: () => fs,
@@ -100,8 +131,10 @@ void main() {
       }, initializeFlutterRoot: false);
 
       testUsingContext('works if --local-engine is specified and --local-engine-src-path is specified', () async {
+        // Intentionally do not create a package_config to verify that it is not required.
         fs.directory('$_kArbitraryEngineRoot/src/out/ios_debug').createSync(recursive: true);
         fs.directory('$_kArbitraryEngineRoot/src/out/host_debug').createSync(recursive: true);
+
         await runner.run(<String>['dummy', '--local-engine-src-path=$_kArbitraryEngineRoot/src', '--local-engine=ios_debug']);
       }, overrides: <Type, Generator>{
         FileSystem: () => fs,
@@ -110,8 +143,10 @@ void main() {
       }, initializeFlutterRoot: false);
 
       testUsingContext('works if --local-engine is specified and --local-engine-src-path is determined by flutter root', () async {
+        fs.file(_kDotPackages).writeAsStringSync('\n');
         fs.directory('$_kEngineRoot/src/out/ios_debug').createSync(recursive: true);
         fs.directory('$_kEngineRoot/src/out/host_debug').createSync(recursive: true);
+
         await runner.run(<String>['dummy', '--local-engine=ios_debug']);
       }, overrides: <Type, Generator>{
         FileSystem: () => fs,
@@ -148,7 +183,11 @@ void main() {
           workingDirectory: Cache.flutterRoot)).thenReturn(result);
         when(processManager.runSync(FlutterVersion.gitLog('-n 1 --pretty=format:%ar'.split(' ')),
           workingDirectory: Cache.flutterRoot)).thenReturn(result);
-        when(processManager.runSync('git describe --match v*.*.* --first-parent --long --tags'.split(' '),
+        when(processManager.runSync('git fetch https://github.com/flutter/flutter.git --tags'.split(' '),
+          workingDirectory: Cache.flutterRoot)).thenReturn(result);
+        when(processManager.runSync('git tag --contains HEAD'.split(' '),
+          workingDirectory: Cache.flutterRoot)).thenReturn(result);
+        when(processManager.runSync('git describe --match *.*.*-*.*.pre --first-parent --long --tags'.split(' '),
           workingDirectory: Cache.flutterRoot)).thenReturn(result);
         when(processManager.runSync(FlutterVersion.gitLog('-n 1 --pretty=format:%ad --date=iso'.split(' ')),
           workingDirectory: Cache.flutterRoot)).thenReturn(result);
@@ -260,7 +299,7 @@ class FakeFlutterCommand extends FlutterCommand {
 
   @override
   Future<FlutterCommandResult> runCommand() {
-    preferences = outputPreferences;
+    preferences = globals.outputPreferences;
     return Future<FlutterCommandResult>.value(const FlutterCommandResult(ExitStatus.success));
   }
 

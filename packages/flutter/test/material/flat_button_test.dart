@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/gestures.dart';
@@ -34,7 +36,7 @@ void main() {
     expect(material.clipBehavior, Clip.none);
     expect(material.color, null);
     expect(material.elevation, 0.0);
-    expect(material.shadowColor, const Color(0xff000000));
+    expect(material.shadowColor, null);
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.0)));
     expect(material.textStyle.color, const Color(0xdd000000));
     expect(material.textStyle.fontFamily, 'Roboto');
@@ -54,7 +56,7 @@ void main() {
     expect(material.clipBehavior, Clip.none);
     expect(material.color, null);
     expect(material.elevation, 0.0);
-    expect(material.shadowColor, const Color(0xff000000));
+    expect(material.shadowColor, null);
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.0)));
     expect(material.textStyle.color, const Color(0xdd000000));
     expect(material.textStyle.fontFamily, 'Roboto');
@@ -79,7 +81,7 @@ void main() {
     expect(material.clipBehavior, Clip.none);
     expect(material.color, null);
     expect(material.elevation, 0.0);
-    expect(material.shadowColor, const Color(0xff000000));
+    expect(material.shadowColor, null);
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.0)));
     expect(material.textStyle.color, const Color(0x61000000));
     expect(material.textStyle.fontFamily, 'Roboto');
@@ -153,8 +155,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 800)); // Wait for splash and highlight to be well under way.
     await expectLater(tester, meetsGuideline(textContrastGuideline));
   },
+    skip: isBrowser, // https://github.com/flutter/flutter/issues/44115
     semanticsEnabled: true,
-    skip: isBrowser,
   );
 
   testWidgets('FlatButton with colored theme meets a11y contrast guidelines', (WidgetTester tester) async {
@@ -218,8 +220,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 800)); // Wait for splash and highlight to be well under way.
     await expectLater(tester, meetsGuideline(textContrastGuideline));
   },
+    skip: isBrowser, // https://github.com/flutter/flutter/issues/44115
     semanticsEnabled: true,
-    skip: isBrowser,
   );
 
   testWidgets('FlatButton uses stateful color for text color in different states', (WidgetTester tester) async {
@@ -437,6 +439,78 @@ void main() {
     await gesture.removePointer();
   });
 
+  testWidgets('FlatButton changes mouse cursor when hovered', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.forbidden,
+          child: FlatButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('Hello'),
+            onPressed: () {},
+            mouseCursor: SystemMouseCursors.text,
+          ),
+        ),
+      ),
+    );
+
+    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse, pointer: 1);
+    await gesture.addPointer(location: const Offset(1, 1));
+    addTearDown(gesture.removePointer);
+
+    await tester.pump();
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.text);
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.forbidden,
+          child: FlatButton(
+            onPressed: () {},
+            mouseCursor: SystemMouseCursors.text,
+            child: const Text('Hello'),
+          ),
+        ),
+      ),
+    );
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.text);
+
+    // Test default cursor
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.forbidden,
+          child: FlatButton(
+            onPressed: () {},
+            child: const Text('Hello'),
+          ),
+        ),
+      ),
+    );
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.click);
+
+    // Test default cursor when disabled
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.forbidden,
+          child: FlatButton(
+            onPressed: null,
+            child: Text('Hello'),
+          ),
+        ),
+      ),
+    );
+
+    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.basic);
+  });
+
   testWidgets('Does FlatButton work with focus', (WidgetTester tester) async {
     const Color focusColor = Color(0xff001122);
 
@@ -571,7 +645,7 @@ void main() {
     expect(tester.getSize(find.byType(FlatButton)).height, equals(48.0));
     expect(tester.getSize(find.byType(Text)).width, isIn(<double>[126.0, 127.0]));
     expect(tester.getSize(find.byType(Text)).height, equals(42.0));
-  }, skip: isBrowser);
+  });
 
   testWidgets('FlatButton size is configurable by ThemeData.materialTapTargetSize', (WidgetTester tester) async {
     final Key key1 = UniqueKey();

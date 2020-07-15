@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -503,19 +505,20 @@ class SliverConstraints extends Constraints {
 
   @override
   String toString() {
-    return 'SliverConstraints('
-             '$axisDirection, '
-             '$growthDirection, '
-             '$userScrollDirection, '
-             'scrollOffset: ${scrollOffset.toStringAsFixed(1)}, '
-             'remainingPaintExtent: ${remainingPaintExtent.toStringAsFixed(1)}, ' +
-             (overlap != 0.0 ? 'overlap: ${overlap.toStringAsFixed(1)}, ' : '') +
-             'crossAxisExtent: ${crossAxisExtent.toStringAsFixed(1)}, '
-             'crossAxisDirection: $crossAxisDirection, '
-             'viewportMainAxisExtent: ${viewportMainAxisExtent.toStringAsFixed(1)}, '
-             'remainingCacheExtent: ${remainingCacheExtent.toStringAsFixed(1)} '
-             'cacheOrigin: ${cacheOrigin.toStringAsFixed(1)} '
-           ')';
+    final List<String> properties = <String>[
+      '$axisDirection',
+      '$growthDirection',
+      '$userScrollDirection',
+      'scrollOffset: ${scrollOffset.toStringAsFixed(1)}',
+      'remainingPaintExtent: ${remainingPaintExtent.toStringAsFixed(1)}',
+      if (overlap != 0.0) 'overlap: ${overlap.toStringAsFixed(1)}',
+      'crossAxisExtent: ${crossAxisExtent.toStringAsFixed(1)}',
+      'crossAxisDirection: $crossAxisDirection',
+      'viewportMainAxisExtent: ${viewportMainAxisExtent.toStringAsFixed(1)}',
+      'remainingCacheExtent: ${remainingCacheExtent.toStringAsFixed(1)}',
+      'cacheOrigin: ${cacheOrigin.toStringAsFixed(1)}',
+    ];
+    return 'SliverConstraints(${properties.join(', ')})';
   }
 }
 
@@ -524,7 +527,7 @@ class SliverConstraints extends Constraints {
 /// A sliver can occupy space in several different ways, which is why this class
 /// contains multiple values.
 @immutable
-class SliverGeometry extends Diagnosticable {
+class SliverGeometry with Diagnosticable {
   /// Creates an object that describes the amount of space occupied by a sliver.
   ///
   /// If the [layoutExtent] argument is null, [layoutExtent] defaults to the
@@ -633,7 +636,7 @@ class SliverGeometry extends Diagnosticable {
   ///
   /// This value is typically 0 when outside of the viewport and grows or
   /// shrinks from 0 or to 0 as the sliver is being scrolled into and out of the
-  /// viewport unless then sliver wants to achieve a special effect and push
+  /// viewport unless the sliver wants to achieve a special effect and push
   /// down the layout start position of subsequent slivers before the sliver is
   /// even scrolled into the viewport.
   final double layoutExtent;
@@ -744,7 +747,7 @@ class SliverGeometry extends Diagnosticable {
           'The "maxPaintExtent" is less than the "paintExtent".',
           details:
             _debugCompareFloats('maxPaintExtent', maxPaintExtent, 'paintExtent', paintExtent)
-              ..add(ErrorDescription('By definition, a sliver can\'t paint more than the maximum that it can paint!')),
+              ..add(ErrorDescription("By definition, a sliver can't paint more than the maximum that it can paint!")),
         );
       }
       verify(hitTestExtent != null, 'The "hitTestExtent" is null.');
@@ -758,7 +761,7 @@ class SliverGeometry extends Diagnosticable {
   }
 
   @override
-  String toStringShort() => '${objectRuntimeType(this, 'SliverGeometry')}';
+  String toStringShort() => objectRuntimeType(this, 'SliverGeometry');
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -858,7 +861,7 @@ class SliverHitTestResult extends HitTestResult {
     assert(crossAxisPosition != null);
     assert(hitTest != null);
     if (paintOffset != null) {
-      pushTransform(Matrix4.translationValues(paintOffset.dx, paintOffset.dy, 0));
+      pushOffset(-paintOffset);
     }
     final bool isHit = hitTest(
       this,
@@ -927,13 +930,16 @@ class SliverLogicalParentData extends ParentData {
   ///
   /// The number of pixels from from the zero scroll offset of the parent sliver
   /// (the line at which its [SliverConstraints.scrollOffset] is zero) to the
-  /// side of the child closest to that offset.
+  /// side of the child closest to that offset. A [layoutOffset] can be null
+  /// when it cannot be determined. The value will be set after layout.
   ///
   /// In a typical list, this does not change as the parent is scrolled.
-  double layoutOffset = 0.0;
+  ///
+  /// Defaults to null.
+  double layoutOffset;
 
   @override
-  String toString() => 'layoutOffset=${layoutOffset.toStringAsFixed(1)}';
+  String toString() => 'layoutOffset=${layoutOffset == null ? 'None': layoutOffset.toStringAsFixed(1)}';
 }
 
 /// Parent data for slivers that have multiple children and that position their
@@ -1812,6 +1818,7 @@ class RenderSliverToBoxAdapter extends RenderSliverSingleBoxAdapter {
       geometry = SliverGeometry.zero;
       return;
     }
+    final SliverConstraints constraints = this.constraints;
     child.layout(constraints.asBoxConstraints(), parentUsesSize: true);
     double childExtent;
     switch (constraints.axis) {

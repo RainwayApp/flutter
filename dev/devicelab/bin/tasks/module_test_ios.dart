@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_devicelab/framework/framework.dart';
+import 'package:flutter_devicelab/framework/ios.dart';
 import 'package:flutter_devicelab/framework/utils.dart';
 import 'package:path/path.dart' as path;
 
@@ -29,6 +30,18 @@ Future<void> main() async {
           ],
         );
       });
+
+      // Copy test dart files to new module app.
+      final Directory flutterModuleLibSource = Directory(path.join(flutterDirectory.path, 'dev', 'integration_tests', 'ios_host_app', 'flutterapp', 'lib'));
+      final Directory flutterModuleLibDestination = Directory(path.join(projectDir.path, 'lib'));
+
+      // These test files don't have a .dart prefix so the analyzer will ignore them. They aren't in a
+      // package and don't work on their own outside of the test module just created.
+      final File main = File(path.join(flutterModuleLibSource.path, 'main'));
+      main.copySync(path.join(flutterModuleLibDestination.path, 'main.dart'));
+
+      final File marquee = File(path.join(flutterModuleLibSource.path, 'marquee'));
+      marquee.copySync(path.join(flutterModuleLibDestination.path, 'marquee.dart'));
 
       section('Build ephemeral host app in release mode without CocoaPods');
 
@@ -54,13 +67,6 @@ Future<void> main() async {
       if (!await _isAppAotBuild(ephemeralReleaseHostApp)) {
         return TaskResult.failure(
           'Ephemeral host app ${ephemeralReleaseHostApp.path} was not a release build as expected'
-        );
-      }
-
-      if (await _hasDebugSymbols(ephemeralReleaseHostApp)) {
-        return TaskResult.failure(
-          "Ephemeral host app ${ephemeralReleaseHostApp.path}'s App.framework's "
-          "debug symbols weren't stripped in release mode"
         );
       }
 
@@ -94,12 +100,6 @@ Future<void> main() async {
       if (!await _isAppAotBuild(ephemeralProfileHostApp)) {
         return TaskResult.failure(
           'Ephemeral host app ${ephemeralProfileHostApp.path} was not a profile build as expected'
-        );
-      }
-
-      if (!await _hasDebugSymbols(ephemeralProfileHostApp)) {
-        return TaskResult.failure(
-          "Ephemeral host app ${ephemeralProfileHostApp.path}'s App.framework does not contain debug symbols"
         );
       }
 
@@ -194,42 +194,6 @@ Future<void> main() async {
         return TaskResult.failure('Building ephemeral host app Podfile.lock does not contain expected pods');
       }
 
-      section('Clean build');
-
-      await inDirectory(projectDir, () async {
-        await flutter('clean');
-      });
-
-      section('Make iOS host app editable');
-
-      await inDirectory(projectDir, () async {
-        await flutter(
-          'make-host-app-editable',
-          options: <String>['ios'],
-        );
-      });
-
-      section('Build editable host app');
-
-      await inDirectory(projectDir, () async {
-        await flutter(
-          'build',
-          options: <String>['ios', '--no-codesign'],
-        );
-      });
-
-      final bool editableHostAppBuilt = exists(Directory(path.join(
-        projectDir.path,
-        'build',
-        'ios',
-        'iphoneos',
-        'Runner.app',
-      )));
-
-      if (!editableHostAppBuilt) {
-        return TaskResult.failure('Failed to build editable host .app');
-      }
-
       section('Add to existing iOS Objective-C app');
 
       final Directory objectiveCHostApp = Directory(path.join(tempDir.path, 'hello_host_app'));
@@ -283,17 +247,41 @@ Future<void> main() async {
       final String objectiveCAnalyticsOutput = objectiveCAnalyticsOutputFile.readAsStringSync();
       if (!objectiveCAnalyticsOutput.contains('cd24: ios')
           || !objectiveCAnalyticsOutput.contains('cd25: true')
-          || !objectiveCAnalyticsOutput.contains('viewName: build/bundle')) {
+          || !objectiveCAnalyticsOutput.contains('viewName: assemble')) {
         return TaskResult.failure(
-          'Building outer Objective-C app produced the following analytics: "$objectiveCAnalyticsOutput"'
-          'but not the expected strings: "cd24: ios", "cd25: true", "viewName: build/bundle"'
+          'Building outer Objective-C app produced the following analytics: "$objectiveCAnalyticsOutput" '
+          'but not the expected strings: "cd24: ios", "cd25: true", "viewName: assemble"'
         );
       }
 
+      section('Run platform unit tests');
+      await testWithNewiOSSimulator('TestAdd2AppSim', (String deviceId) =>
+        inDirectory(objectiveCHostApp, () =>
+          exec(
+            'xcodebuild',
+            <String>[
+              '-workspace',
+              'Host.xcworkspace',
+              '-scheme',
+              'Host',
+              '-configuration',
+              'Debug',
+              '-destination',
+              'id=$deviceId',
+              'test',
+              'CODE_SIGNING_ALLOWED=NO',
+              'CODE_SIGNING_REQUIRED=NO',
+              'CODE_SIGN_IDENTITY=-',
+              'EXPANDED_CODE_SIGN_IDENTITY=-',
+              'COMPILER_INDEX_STORE_ENABLE=NO',
+            ],
+          )
+        )
+      );
+
       section('Fail building existing Objective-C iOS app if flutter script fails');
-      int xcodebuildExitCode = 0;
-      await inDirectory(objectiveCHostApp, () async {
-        xcodebuildExitCode = await exec(
+      final int xcodebuildExitCode = await inDirectory<int>(objectiveCHostApp, () =>
+        exec(
           'xcodebuild',
           <String>[
             '-workspace',
@@ -311,8 +299,8 @@ Future<void> main() async {
             'COMPILER_INDEX_STORE_ENABLE=NO',
           ],
           canFail: true,
-        );
-      });
+        )
+      );
 
       if (xcodebuildExitCode != 65) { // 65 returned on PhaseScriptExecution failure.
         return TaskResult.failure('Host Objective-C app build succeeded though flutter script failed');
@@ -372,10 +360,10 @@ Future<void> main() async {
       final String swiftAnalyticsOutput = swiftAnalyticsOutputFile.readAsStringSync();
       if (!swiftAnalyticsOutput.contains('cd24: ios')
           || !swiftAnalyticsOutput.contains('cd25: true')
-          || !swiftAnalyticsOutput.contains('viewName: build/bundle')) {
+          || !swiftAnalyticsOutput.contains('viewName: assemble')) {
         return TaskResult.failure(
-          'Building outer Swift app produced the following analytics: "$swiftAnalyticsOutput"'
-          'but not the expected strings: "cd24: ios", "cd25: true", "viewName: build/bundle"'
+          'Building outer Swift app produced the following analytics: "$swiftAnalyticsOutput" '
+          'but not the expected strings: "cd24: ios", "cd25: true", "viewName: assemble"'
         );
       }
 
@@ -405,27 +393,4 @@ Future<bool> _isAppAotBuild(Directory app) async {
   );
 
   return symbolTable.contains('kDartIsolateSnapshotInstructions');
-}
-
-Future<bool> _hasDebugSymbols(Directory app) async {
-  final String binary = path.join(
-    app.path,
-    'Frameworks',
-    'App.framework',
-    'App',
-  );
-
-  final String symbolTable = await eval(
-    'dsymutil',
-    <String> [
-      '--dump-debug-map',
-      binary,
-    ],
-    // The output is huge.
-    printStdout: false,
-  );
-
-  // Search for some random Flutter framework Dart function which should always
-  // be in App.framework.
-  return symbolTable.contains('BuildOwner_reassemble');
 }

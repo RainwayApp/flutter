@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -30,7 +32,7 @@ class ImageFiltered extends SingleChildRenderObjectWidget {
 
   @override
   void updateRenderObject(BuildContext context, _ImageFilterRenderObject renderObject) {
-    renderObject..imageFilter = imageFilter;
+    renderObject.imageFilter = imageFilter;
   }
 
   @override
@@ -63,8 +65,7 @@ class _ImageFilterRenderObject extends RenderProxyBox {
       layer = ImageFilterLayer(imageFilter: imageFilter);
     } else {
       final ImageFilterLayer filterLayer = layer as ImageFilterLayer;
-      filterLayer
-        ..imageFilter = imageFilter;
+      filterLayer.imageFilter = imageFilter;
     }
     context.pushLayer(layer, super.paint, offset);
     assert(layer != null);

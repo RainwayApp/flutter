@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' show Color, Brightness;
 
 import '../../foundation.dart';
@@ -18,7 +20,7 @@ import 'theme.dart';
 /// A palette of [Color] constants that describe colors commonly used when
 /// matching the iOS platform aesthetics.
 class CupertinoColors {
-  // This class is not meant to be instatiated or extended; this constructor
+  // This class is not meant to be instantiated or extended; this constructor
   // prevents instantiation and extension.
   // ignore: unused_element
   CupertinoColors._();
@@ -572,7 +574,7 @@ class CupertinoColors {
   );
 }
 
-/// A [Color] subclass that represents a family of colors, and the currect effective
+/// A [Color] subclass that represents a family of colors, and the correct effective
 /// color in the color family.
 ///
 /// When used as a regular color, [CupertinoDynamicColor] is equivalent to the
@@ -675,7 +677,7 @@ class CupertinoColors {
 ///  * [CupertinoTheme.of], a static method that retrieves the ambient [CupertinoThemeData],
 ///    and then resolves [CupertinoDynamicColor]s used in the retrieved data.
 @immutable
-class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Diagnosticable {
+class CupertinoDynamicColor extends Color with Diagnosticable {
   /// Creates an adaptive [Color] that changes its effective color based on the
   /// [BuildContext] given. The default effective color is [color].
   ///
@@ -772,7 +774,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
       assert(_effectiveColor != null),
       // The super constructor has to be called with a dummy value in order to mark
       // this constructor const.
-      // The field `value` is overriden in the class implementation.
+      // The field `value` is overridden in the class implementation.
       super(0);
 
   /// The current effective color.
@@ -793,7 +795,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   ///
   /// In other words, this color will be the effective color of the [CupertinoDynamicColor]
   /// after it is resolved against a [BuildContext] that:
-  /// - has a [CupertinoTheme] whose [brightness] is [Brightness.light],
+  /// - has a [CupertinoTheme] whose [CupertinoThemeData.brightness] is [Brightness.light],
   /// or a [MediaQuery] whose [MediaQueryData.platformBrightness] is [Brightness.light].
   /// - has a [MediaQuery] whose [MediaQueryData.highContrast] is `false`.
   /// - has a [CupertinoUserInterfaceLevel] that indicates [CupertinoUserInterfaceLevelData.base].
@@ -804,7 +806,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   ///
   /// In other words, this color will be the effective color of the [CupertinoDynamicColor]
   /// after it is resolved against a [BuildContext] that:
-  /// - has a [CupertinoTheme] whose [brightness] is [Brightness.dark],
+  /// - has a [CupertinoTheme] whose [CupertinoThemeData.brightness] is [Brightness.dark],
   /// or a [MediaQuery] whose [MediaQueryData.platformBrightness] is [Brightness.dark].
   /// - has a [MediaQuery] whose [MediaQueryData.highContrast] is `false`.
   /// - has a [CupertinoUserInterfaceLevel] that indicates [CupertinoUserInterfaceLevelData.base].
@@ -815,7 +817,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   ///
   /// In other words, this color will be the effective color of the [CupertinoDynamicColor]
   /// after it is resolved against a [BuildContext] that:
-  /// - has a [CupertinoTheme] whose [brightness] is [Brightness.light],
+  /// - has a [CupertinoTheme] whose [CupertinoThemeData.brightness] is [Brightness.light],
   /// or a [MediaQuery] whose [MediaQueryData.platformBrightness] is [Brightness.light].
   /// - has a [MediaQuery] whose [MediaQueryData.highContrast] is `true`.
   /// - has a [CupertinoUserInterfaceLevel] that indicates [CupertinoUserInterfaceLevelData.base].
@@ -826,7 +828,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   ///
   /// In other words, this color will be the effective color of the [CupertinoDynamicColor]
   /// after it is resolved against a [BuildContext] that:
-  /// - has a [CupertinoTheme] whose [brightness] is [Brightness.dark],
+  /// - has a [CupertinoTheme] whose [CupertinoThemeData.brightness] is [Brightness.dark],
   /// or a [MediaQuery] whose [MediaQueryData.platformBrightness] is [Brightness.dark].
   /// - has a [MediaQuery] whose [MediaQueryData.highContrast] is `true`.
   /// - has a [CupertinoUserInterfaceLevel] that indicates [CupertinoUserInterfaceLevelData.base].
@@ -837,7 +839,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   ///
   /// In other words, this color will be the effective color of the [CupertinoDynamicColor]
   /// after it is resolved against a [BuildContext] that:
-  /// - has a [CupertinoTheme] whose [brightness] is [Brightness.light],
+  /// - has a [CupertinoTheme] whose [CupertinoThemeData.brightness] is [Brightness.light],
   /// or a [MediaQuery] whose [MediaQueryData.platformBrightness] is [Brightness.light].
   /// - has a [MediaQuery] whose [MediaQueryData.highContrast] is `false`.
   /// - has a [CupertinoUserInterfaceLevel] that indicates [CupertinoUserInterfaceLevelData.elevated].
@@ -848,7 +850,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   ///
   /// In other words, this color will be the effective color of the [CupertinoDynamicColor]
   /// after it is resolved against a [BuildContext] that:
-  /// - has a [CupertinoTheme] whose [brightness] is [Brightness.dark],
+  /// - has a [CupertinoTheme] whose [CupertinoThemeData.brightness] is [Brightness.dark],
   /// or a [MediaQuery] whose [MediaQueryData.platformBrightness] is [Brightness.dark].
   /// - has a [MediaQuery] whose [MediaQueryData.highContrast] is `false`.
   /// - has a [CupertinoUserInterfaceLevel] that indicates [CupertinoUserInterfaceLevelData.elevated].
@@ -859,7 +861,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   ///
   /// In other words, this color will be the effective color of the [CupertinoDynamicColor]
   /// after it is resolved against a [BuildContext] that:
-  /// - has a [CupertinoTheme] whose [brightness] is [Brightness.light],
+  /// - has a [CupertinoTheme] whose [CupertinoThemeData.brightness] is [Brightness.light],
   /// or a [MediaQuery] whose [MediaQueryData.platformBrightness] is [Brightness.light].
   /// - has a [MediaQuery] whose [MediaQueryData.highContrast] is `true`.
   /// - has a [CupertinoUserInterfaceLevel] that indicates [CupertinoUserInterfaceLevelData.elevated].
@@ -870,7 +872,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   ///
   /// In other words, this color will be the effective color of the [CupertinoDynamicColor]
   /// after it is resolved against a [BuildContext] that:
-  /// - has a [CupertinoTheme] whose [brightness] is [Brightness.dark],
+  /// - has a [CupertinoTheme] whose [CupertinoThemeData.brightness] is [Brightness.dark],
   /// or a [MediaQuery] whose [MediaQueryData.platformBrightness] is [Brightness.dark].
   /// - has a [MediaQuery] whose [MediaQueryData.highContrast] is `true`.
   /// - has a [CupertinoUserInterfaceLevel] that indicates [CupertinoUserInterfaceLevelData.elevated].
@@ -1033,7 +1035,7 @@ class CupertinoDynamicColor extends Color with DiagnosticableMixin implements Di
   }
 
   @override
-  String toString({ DiagnosticLevel minLevel = DiagnosticLevel.debug }) {
+  String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
     String toString(String name, Color color) {
       final String marker = color == _effectiveColor ? '*' : '';
       return '$marker$name = $color$marker';

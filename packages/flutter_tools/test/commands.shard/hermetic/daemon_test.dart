@@ -21,10 +21,12 @@ import '../../src/mocks.dart';
 void main() {
   Daemon daemon;
   NotifyingLogger notifyingLogger;
+  BufferLogger bufferLogger;
 
   group('daemon', () {
     setUp(() {
-      notifyingLogger = NotifyingLogger();
+      bufferLogger = BufferLogger.test();
+      notifyingLogger = NotifyingLogger(verbose: false, parent: bufferLogger);
     });
 
     tearDown(() {
@@ -41,7 +43,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
       commands.add(<String, dynamic>{'id': 0, 'method': 'daemon.version'});
       final Map<String, dynamic> response = await responses.stream.firstWhere(_notEvent);
@@ -59,7 +60,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
       globals.printError('daemon.logMessage test');
       final Map<String, dynamic> response = await responses.stream.firstWhere((Map<String, dynamic> map) {
@@ -87,7 +87,6 @@ void main() {
           responses.add,
           notifyingLogger: notifyingLogger,
           logToStdout: true,
-          dartDefines: const <String>[],
         );
         globals.printStatus('daemon.logMessage test');
         // Service the event loop.
@@ -108,7 +107,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
       commands.add(<String, dynamic>{'id': 0, 'method': 'daemon.shutdown'});
       return daemon.onExit.then<void>((int code) async {
@@ -124,7 +122,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
 
       commands.add(<String, dynamic>{'id': 0, 'method': 'app.restart'});
@@ -142,7 +139,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
 
       commands.add(<String, dynamic>{
@@ -166,7 +162,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
 
       commands.add(<String, dynamic>{'id': 0, 'method': 'app.stop'});
@@ -184,7 +179,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
       commands.add(<String, dynamic>{'id': 0, 'method': 'device.getDevices'});
       final Map<String, dynamic> response = await responses.stream.firstWhere(_notEvent);
@@ -201,9 +195,8 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
-      final MockPollingDeviceDiscovery discoverer = MockPollingDeviceDiscovery();
+      final FakePollingDeviceDiscovery discoverer = FakePollingDeviceDiscovery();
       daemon.deviceDomain.addDeviceDiscoverer(discoverer);
       discoverer.addDevice(MockAndroidDevice());
       commands.add(<String, dynamic>{'id': 0, 'method': 'device.getDevices'});
@@ -223,10 +216,9 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
 
-      final MockPollingDeviceDiscovery discoverer = MockPollingDeviceDiscovery();
+      final FakePollingDeviceDiscovery discoverer = FakePollingDeviceDiscovery();
       daemon.deviceDomain.addDeviceDiscoverer(discoverer);
       discoverer.addDevice(MockAndroidDevice());
 
@@ -253,7 +245,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
 
       commands.add(<String, dynamic>{'id': 0, 'method': 'emulator.launch'});
@@ -271,7 +262,6 @@ void main() {
         commands.stream,
         responses.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
       commands.add(<String, dynamic>{'id': 0, 'method': 'emulator.getEmulators'});
       final Map<String, dynamic> response = await responses.stream.firstWhere(_notEvent);
@@ -291,7 +281,6 @@ void main() {
         input.stream,
         output.add,
         notifyingLogger: notifyingLogger,
-        dartDefines: const <String>[],
       );
 
       // Respond to any requests from the daemon to expose a URL.
@@ -309,6 +298,39 @@ void main() {
       await output.close();
       await input.close();
     });
+  });
+
+  testUsingContext('notifyingLogger outputs trace messages in verbose mode', () async {
+    final NotifyingLogger logger = NotifyingLogger(verbose: true, parent: bufferLogger);
+
+    logger.printTrace('test');
+
+    expect(bufferLogger.errorText, contains('test'));
+  });
+
+  testUsingContext('notifyingLogger ignores trace messages in non-verbose mode', () async {
+    final NotifyingLogger logger = NotifyingLogger(verbose: false, parent: bufferLogger);
+
+    final Future<LogMessage> messageResult = logger.onMessage.first;
+    logger.printTrace('test');
+    logger.printStatus('hello');
+
+    final LogMessage message = await messageResult;
+
+    expect(message.level, 'status');
+    expect(message.message, 'hello');
+    expect(bufferLogger.errorText, contains('test'));
+  });
+
+  testUsingContext('notifyingLogger buffers messages sent before a subscription', () async {
+    final NotifyingLogger logger = NotifyingLogger(verbose: false, parent: bufferLogger);
+
+    logger.printStatus('hello');
+
+    final LogMessage message = await logger.onMessage.first;
+
+    expect(message.level, 'status');
+    expect(message.message, 'hello');
   });
 
   group('daemon serialization', () {

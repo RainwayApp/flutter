@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -34,6 +36,10 @@ export 'package:flutter/services.dart' show SmartQuotesType, SmartDashesType;
 /// Remember to [dispose] of the [TextEditingController] when it is no longer needed.
 /// This will ensure we discard any resources used by the object.
 ///
+/// By default, [TextFormField.decoration] will apply the
+/// [ThemeData.inputDecorationTheme] for the current context to the
+/// [InputDecoration], see [InputDecoration.applyDefaults].
+///
 /// For a documentation about the various parameters, see [TextField].
 ///
 /// {@tool snippet}
@@ -59,6 +65,53 @@ export 'package:flutter/services.dart' show SmartQuotesType, SmartDashesType;
 ///     return value.contains('@') ? 'Do not use the @ char.' : null;
 ///   },
 /// )
+/// ```
+/// {@end-tool}
+///
+/// {@tool dartpad --template=stateful_widget_material}
+/// This example shows how to move the focus to the next field when the user
+/// presses the ENTER key.
+///
+/// ```dart imports
+/// import 'package:flutter/services.dart';
+/// ```
+///
+/// ```dart
+/// Widget build(BuildContext context) {
+///   return Material(
+///     child: Center(
+///       child: Shortcuts(
+///         shortcuts: <LogicalKeySet, Intent>{
+///           // Pressing space in the field will now move to the next field.
+///           LogicalKeySet(LogicalKeyboardKey.space): const NextFocusIntent(),
+///         },
+///         child: FocusTraversalGroup(
+///           child: Form(
+///             autovalidate: true,
+///             onChanged: () {
+///               Form.of(primaryFocus.context).save();
+///             },
+///             child: Wrap(
+///               children: List<Widget>.generate(5, (int index) {
+///                 return Padding(
+///                   padding: const EdgeInsets.all(8.0),
+///                   child: ConstrainedBox(
+///                     constraints: BoxConstraints.tight(const Size(200, 50)),
+///                     child: TextFormField(
+///                       onSaved: (String value) {
+///                         print('Value for field $index saved as "$value"');
+///                       },
+///                     ),
+///                   ),
+///                 );
+///               }),
+///             ),
+///           ),
+///         ),
+///       ),
+///     ),
+///   );
+/// }
 /// ```
 /// {@end-tool}
 ///
@@ -98,6 +151,7 @@ class TextFormField extends FormField<String> {
     bool readOnly = false,
     ToolbarOptions toolbarOptions,
     bool showCursor,
+    String obscuringCharacter = '•',
     bool obscureText = false,
     bool autocorrect = true,
     SmartDashesType smartDashesType,
@@ -116,7 +170,7 @@ class TextFormField extends FormField<String> {
     FormFieldSetter<String> onSaved,
     FormFieldValidator<String> validator,
     List<TextInputFormatter> inputFormatters,
-    bool enabled = true,
+    bool enabled,
     double cursorWidth = 2.0,
     Radius cursorRadius,
     Color cursorColor,
@@ -125,10 +179,12 @@ class TextFormField extends FormField<String> {
     bool enableInteractiveSelection = true,
     InputCounterWidgetBuilder buildCounter,
     ScrollPhysics scrollPhysics,
+    Iterable<String> autofillHints,
   }) : assert(initialValue == null || controller == null),
        assert(textAlign != null),
        assert(autofocus != null),
        assert(readOnly != null),
+       assert(obscuringCharacter != null && obscuringCharacter.length == 1),
        assert(obscureText != null),
        assert(autocorrect != null),
        assert(enableSuggestions != null),
@@ -139,7 +195,7 @@ class TextFormField extends FormField<String> {
        assert(minLines == null || minLines > 0),
        assert(
          (maxLines == null) || (minLines == null) || (maxLines >= minLines),
-         'minLines can\'t be greater than maxLines',
+         "minLines can't be greater than maxLines",
        ),
        assert(expands != null),
        assert(
@@ -155,7 +211,7 @@ class TextFormField extends FormField<String> {
     onSaved: onSaved,
     validator: validator,
     autovalidate: autovalidate,
-    enabled: enabled,
+    enabled: enabled ?? decoration?.enabled ?? true,
     builder: (FormFieldState<String> field) {
       final _TextFormFieldState state = field as _TextFormFieldState;
       final InputDecoration effectiveDecoration = (decoration ?? const InputDecoration())
@@ -182,6 +238,7 @@ class TextFormField extends FormField<String> {
         toolbarOptions: toolbarOptions,
         readOnly: readOnly,
         showCursor: showCursor,
+        obscuringCharacter: obscuringCharacter,
         obscureText: obscureText,
         autocorrect: autocorrect,
         smartDashesType: smartDashesType ?? (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
@@ -197,7 +254,7 @@ class TextFormField extends FormField<String> {
         onEditingComplete: onEditingComplete,
         onSubmitted: onFieldSubmitted,
         inputFormatters: inputFormatters,
-        enabled: enabled,
+        enabled: enabled ?? decoration?.enabled ?? true,
         cursorWidth: cursorWidth,
         cursorRadius: cursorRadius,
         cursorColor: cursorColor,
@@ -206,6 +263,7 @@ class TextFormField extends FormField<String> {
         keyboardAppearance: keyboardAppearance,
         enableInteractiveSelection: enableInteractiveSelection,
         buildCounter: buildCounter,
+        autofillHints: autofillHints,
       );
     },
   );
@@ -259,6 +317,14 @@ class _TextFormFieldState extends FormFieldState<String> {
   void dispose() {
     widget.controller?.removeListener(_handleControllerChanged);
     super.dispose();
+  }
+
+  @override
+  void didChange(String value) {
+    super.didChange(value);
+
+    if (_effectiveController.text != value)
+      _effectiveController.text = value;
   }
 
   @override

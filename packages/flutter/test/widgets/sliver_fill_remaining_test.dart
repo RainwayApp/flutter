@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -283,7 +285,6 @@ void main() {
       });
 
       testWidgets('alignment with a flexible works', (WidgetTester tester) async {
-        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
         final GlobalKey key = GlobalKey();
         final List<Widget> slivers = <Widget>[
           sliverBox,
@@ -347,13 +348,10 @@ void main() {
         );
         expect(tester.getBottomLeft(button).dy, lessThan(600.0));
         expect(tester.getCenter(button).dx, equals(400.0));
-
-        debugDefaultTargetPlatformOverride = null;
-      });
+      }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.macOS }));
 
       group('fillOverscroll: true, relevant platforms', () {
         testWidgets('child without size is sized by extent and overscroll', (WidgetTester tester) async {
-          debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
           final List<Widget> slivers = <Widget>[
             sliverBox,
             SliverFillRemaining(
@@ -378,12 +376,9 @@ void main() {
           await tester.pumpAndSettle();
           final RenderBox box3 = tester.renderObject<RenderBox>(find.byType(Container).last);
           expect(box3.size.height, equals(450));
-
-          debugDefaultTargetPlatformOverride = null;
-        });
+    }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
 
         testWidgets('child with smaller size is overridden and sized by extent and overscroll', (WidgetTester tester) async {
-          debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
           final GlobalKey key = GlobalKey();
           final List<Widget> slivers = <Widget>[
             sliverBox,
@@ -428,12 +423,9 @@ void main() {
             tester.renderObject<RenderBox>(find.byKey(key)).size.height,
             equals(450),
           );
-
-          debugDefaultTargetPlatformOverride = null;
-        });
+        }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
 
         testWidgets('extent is overridden by child size and overscroll if precedingScrollExtent > viewportMainAxisExtent', (WidgetTester tester) async {
-          debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
           final GlobalKey key = GlobalKey();
           final ScrollController controller = ScrollController();
           final List<Widget> slivers = <Widget>[
@@ -473,12 +465,10 @@ void main() {
             tester.renderObject<RenderBox>(find.byKey(key)).size.height,
             equals(148.0),
           );
-
           // Check that the button alignment is true to expectations
           final Finder button = find.byType(RaisedButton);
           expect(tester.getBottomLeft(button).dy, equals(550.0));
           expect(tester.getCenter(button).dx, equals(400.0));
-          debugDefaultTargetPlatformOverride = null;
 
           // Drag for overscroll
           await tester.drag(find.byType(Scrollable), const Offset(0.0, -50.0));
@@ -498,19 +488,18 @@ void main() {
             tester.renderObject<RenderBox>(find.byKey(key)).size.height,
             equals(148.0),
           );
-
-          debugDefaultTargetPlatformOverride = null;
-        });
+        }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
 
         testWidgets('fillOverscroll works when child has no size and precedingScrollExtent > viewportMainAxisExtent', (WidgetTester tester) async {
-          debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
           final GlobalKey key = GlobalKey();
           final ScrollController controller = ScrollController();
           final List<Widget> slivers = <Widget>[
             SliverFixedExtentList(
               itemExtent: 150,
               delegate: SliverChildBuilderDelegate(
-                  (BuildContext context, int index) => Container(color: Colors.amber),
+                (BuildContext context, int index) {
+                  return Semantics(label: index.toString(), child: Container(color: Colors.amber));
+                },
                 childCount: 5,
               ),
             ),
@@ -525,8 +514,12 @@ void main() {
           ];
 
           await tester.pumpWidget(boilerplate(slivers, controller: controller));
-          const BoxDecoration amberBox = BoxDecoration(color: Colors.amber);
-          const BoxDecoration blueBox = BoxDecoration(color: Colors.blue);
+
+          expect(find.byKey(key), findsNothing);
+          expect(
+            find.bySemanticsLabel('4'),
+            findsNothing,
+          );
 
           // Scroll to bottom
           controller.jumpTo(controller.position.maxScrollExtent);
@@ -535,8 +528,8 @@ void main() {
           // Check item at the end of the list
           expect(find.byKey(key), findsNothing);
           expect(
-            tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).last.decoration,
-            amberBox,
+            find.bySemanticsLabel('4'),
+            findsOneWidget,
           );
 
           // Overscroll
@@ -546,23 +539,20 @@ void main() {
           // Check for new item at the end of the now overscrolled list
           expect(find.byKey(key), findsOneWidget);
           expect(
-            tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).last.decoration,
-            blueBox,
+            find.bySemanticsLabel('4'),
+            findsOneWidget,
           );
 
           // Ensure overscroll retracts to original size after releasing gesture
           await tester.pumpAndSettle();
           expect(find.byKey(key), findsNothing);
           expect(
-            tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).last.decoration,
-            amberBox,
+            find.bySemanticsLabel('4'),
+            findsOneWidget,
           );
-
-          debugDefaultTargetPlatformOverride = null;
-        });
+        }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
 
         testWidgets('alignment with a flexible works with fillOverscroll', (WidgetTester tester) async {
-          debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
           final GlobalKey key = GlobalKey();
           final List<Widget> slivers = <Widget>[
             sliverBox,
@@ -648,12 +638,10 @@ void main() {
           );
           expect(tester.getBottomLeft(button).dy, equals(600.0));
           expect(tester.getCenter(button).dx, equals(400.0));
-
-          debugDefaultTargetPlatformOverride = null;
-        });
+        }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
       });
 
-      group('fillOverscroll: true, is ignored on irrevelant platforms', () {
+      group('fillOverscroll: true, is ignored on irrelevant platforms', () {
         // Android/Other scroll physics when hasScrollBody: false, ignores fillOverscroll: true
         testWidgets('child without size is sized by extent', (WidgetTester tester) async {
           final List<Widget> slivers = <Widget>[
@@ -778,7 +766,9 @@ void main() {
             SliverFixedExtentList(
               itemExtent: 150,
               delegate: SliverChildBuilderDelegate(
-                  (BuildContext context, int index) => Container(color: Colors.amber),
+                (BuildContext context, int index) {
+                  return Semantics(label: index.toString(), child: Container(color: Colors.amber));
+                },
                 childCount: 5,
               ),
             ),
@@ -793,7 +783,12 @@ void main() {
           ];
 
           await tester.pumpWidget(boilerplate(slivers, controller: controller));
-          const BoxDecoration amberBox = BoxDecoration(color: Colors.amber);
+
+          expect(find.byKey(key), findsNothing);
+          expect(
+            find.bySemanticsLabel('4'),
+            findsNothing,
+          );
 
           // Scroll to bottom
           controller.jumpTo(controller.position.maxScrollExtent);
@@ -802,8 +797,8 @@ void main() {
           // End of list
           expect(find.byKey(key), findsNothing);
           expect(
-            tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).last.decoration,
-            amberBox,
+            find.bySemanticsLabel('4'),
+            findsOneWidget,
           );
 
           // Overscroll
@@ -812,8 +807,8 @@ void main() {
 
           expect(find.byKey(key), findsNothing);
           expect(
-            tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).last.decoration,
-            amberBox,
+            find.bySemanticsLabel('4'),
+            findsOneWidget,
           );
         });
       });

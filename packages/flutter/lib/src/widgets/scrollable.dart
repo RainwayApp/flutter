@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -246,9 +248,33 @@ class Scrollable extends StatefulWidget {
   /// ```dart
   /// ScrollableState scrollable = Scrollable.of(context);
   /// ```
+  ///
+  /// Calling this method will create a dependency on the closest [Scrollable]
+  /// in the [context], if there is one.
   static ScrollableState of(BuildContext context) {
     final _ScrollableScope widget = context.dependOnInheritedWidgetOfExactType<_ScrollableScope>();
     return widget?.scrollable;
+  }
+
+  /// Provides a heuristic to determine if expensive frame-bound tasks should be
+  /// deferred for the [context] at a specific point in time.
+  ///
+  /// Calling this method does _not_ create a dependency on any other widget.
+  /// This also means that the value returned is only good for the point in time
+  /// when it is called, and callers will not get updated if the value changes.
+  ///
+  /// The heuristic used is determined by the [physics] of this [Scrollable]
+  /// via [ScrollPhysics.recommendDeferredScrolling]. That method is called with
+  /// the current [activity]'s [ScrollActivity.velocity].
+  ///
+  /// If there is no [Scrollable] in the widget tree above the [context], this
+  /// method returns false.
+  static bool recommendDeferredLoadingForContext(BuildContext context) {
+    final _ScrollableScope widget = context.getElementForInheritedWidgetOfExactType<_ScrollableScope>()?.widget as _ScrollableScope;
+    if (widget == null) {
+      return false;
+    }
+    return widget.position.recommendDeferredLoading(context);
   }
 
   /// Scrolls the scrollables that enclose the given context so as to make the
@@ -865,8 +891,7 @@ class ScrollIntent extends Intent {
     @required this.direction,
     this.type = ScrollIncrementType.line,
   })  : assert(direction != null),
-        assert(type != null),
-        super(ScrollAction.key);
+        assert(type != null);
 
   /// The direction in which to scroll the scrollable containing the focused
   /// widget.
@@ -874,11 +899,6 @@ class ScrollIntent extends Intent {
 
   /// The type of scrolling that is intended.
   final ScrollIncrementType type;
-
-  @override
-  bool isEnabled(BuildContext context) {
-    return Scrollable.of(context) != null;
-  }
 }
 
 /// An [Action] that scrolls the [Scrollable] that encloses the current
@@ -888,12 +908,12 @@ class ScrollIntent extends Intent {
 /// for a [ScrollIntent.type] set to [ScrollIncrementType.page] is 80% of the
 /// size of the scroll window, and for [ScrollIncrementType.line], 50 logical
 /// pixels.
-class ScrollAction extends Action {
-  /// Creates a const [ScrollAction].
-  ScrollAction() : super(key);
-
-  /// The [LocalKey] that uniquely connects this action to a [ScrollIntent].
-  static const LocalKey key = ValueKey<Type>(ScrollAction);
+class ScrollAction extends Action<ScrollIntent> {
+  @override
+  bool isEnabled(ScrollIntent intent) {
+    final FocusNode focus = primaryFocus;
+    return focus != null && focus.context != null && Scrollable.of(focus.context) != null;
+  }
 
   // Returns the scroll increment for a single scroll request, for use when
   // scrolling using a hardware keyboard.
@@ -989,8 +1009,8 @@ class ScrollAction extends Action {
   }
 
   @override
-  void invoke(FocusNode node, ScrollIntent intent) {
-    final ScrollableState state = Scrollable.of(node.context);
+  void invoke(ScrollIntent intent) {
+    final ScrollableState state = Scrollable.of(primaryFocus.context);
     assert(state != null, '$ScrollAction was invoked on a context that has no scrollable parent');
     assert(state.position.pixels != null, 'Scrollable must be laid out before it can be scrolled via a ScrollAction');
     assert(state.position.viewportDimension != null);

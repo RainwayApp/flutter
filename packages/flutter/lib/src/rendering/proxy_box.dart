@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 
 import 'dart:ui' as ui show ImageFilter, Gradient, Image, Color;
@@ -11,12 +13,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 
 import 'package:vector_math/vector_math_64.dart';
 
 import 'binding.dart';
 import 'box.dart';
 import 'layer.dart';
+import 'mouse_cursor.dart';
+import 'mouse_tracking.dart';
 import 'object.dart';
 
 export 'package:flutter/gestures.dart' show
@@ -260,6 +265,7 @@ class RenderConstrainedBox extends RenderProxyBox {
 
   @override
   void performLayout() {
+    final BoxConstraints constraints = this.constraints;
     if (child != null) {
       child.layout(_additionalConstraints.enforce(constraints), parentUsesSize: true);
       size = child.size;
@@ -351,6 +357,7 @@ class RenderLimitedBox extends RenderProxyBox {
   @override
   void performLayout() {
     if (child != null) {
+      final BoxConstraints constraints = this.constraints;
       child.layout(_limitConstraints(constraints), parentUsesSize: true);
       size = constraints.constrain(child.size);
     } else {
@@ -461,15 +468,13 @@ class RenderAspectRatio extends RenderProxyBox {
     assert(constraints.debugAssertIsValid());
     assert(() {
       if (!constraints.hasBoundedWidth && !constraints.hasBoundedHeight) {
-        throw FlutterError.fromParts(<DiagnosticsNode>[
-          ErrorSummary('$runtimeType has unbounded constraints.'),
-          ErrorDescription(
-            'This $runtimeType was given an aspect ratio of $aspectRatio but was given '
-            'both unbounded width and unbounded height constraints. Because both '
-            'constraints were unbounded, this render object doesn\'t know how much '
-            'size to consume.'
-          )
-        ]);
+        throw FlutterError(
+          '$runtimeType has unbounded constraints.\n'
+          'This $runtimeType was given an aspect ratio of $aspectRatio but was given '
+          'both unbounded width and unbounded height constraints. Because both '
+          'constraints were unbounded, this render object doesn\'t know how much '
+          'size to consume.'
+        );
       }
       return true;
     }());
@@ -1098,13 +1103,30 @@ class RenderBackdropFilter extends RenderProxyBox {
 ///  * [ClipOval], which can be customized with a [CustomClipper<Rect>].
 ///  * [ClipPath], which can be customized with a [CustomClipper<Path>].
 ///  * [ShapeBorderClipper], for specifying a clip path using a [ShapeBorder].
-abstract class CustomClipper<T> {
+abstract class CustomClipper<T> extends Listenable {
   /// Creates a custom clipper.
   ///
   /// The clipper will update its clip whenever [reclip] notifies its listeners.
   const CustomClipper({ Listenable reclip }) : _reclip = reclip;
 
   final Listenable _reclip;
+
+  /// Register a closure to be notified when it is time to reclip.
+  ///
+  /// The [CustomClipper] implementation merely forwards to the same method on
+  /// the [Listenable] provided to the constructor in the `reclip` argument, if
+  /// it was not null.
+  @override
+  void addListener(VoidCallback listener) => _reclip?.addListener(listener);
+
+  /// Remove a previously registered closure from the list of closures that the
+  /// object notifies when it is time to reclip.
+  ///
+  /// The [CustomClipper] implementation merely forwards to the same method on
+  /// the [Listenable] provided to the constructor in the `reclip` argument, if
+  /// it was not null.
+  @override
+  void removeListener(VoidCallback listener) => _reclip?.removeListener(listener);
 
   /// Returns a description of the clip given that the render object being
   /// clipped is of the given size.
@@ -1138,7 +1160,7 @@ abstract class CustomClipper<T> {
   bool shouldReclip(covariant CustomClipper<T> oldClipper);
 
   @override
-  String toString() => '${objectRuntimeType(this, 'CustomClipper')}';
+  String toString() => objectRuntimeType(this, 'CustomClipper');
 }
 
 /// A [CustomClipper] that clips to the outer path of a [ShapeBorder].
@@ -1206,20 +1228,20 @@ abstract class _RenderCustomClip<T> extends RenderProxyBox {
       _markNeedsClip();
     }
     if (attached) {
-      oldClipper?._reclip?.removeListener(_markNeedsClip);
-      newClipper?._reclip?.addListener(_markNeedsClip);
+      oldClipper?.removeListener(_markNeedsClip);
+      newClipper?.addListener(_markNeedsClip);
     }
   }
 
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
-    _clipper?._reclip?.addListener(_markNeedsClip);
+    _clipper?.addListener(_markNeedsClip);
   }
 
   @override
   void detach() {
-    _clipper?._reclip?.removeListener(_markNeedsClip);
+    _clipper?.removeListener(_markNeedsClip);
     super.detach();
   }
 
@@ -2272,11 +2294,14 @@ class RenderFittedBox extends RenderProxyBox {
     AlignmentGeometry alignment = Alignment.center,
     TextDirection textDirection,
     RenderBox child,
+    Clip clipBehavior = Clip.none,
   }) : assert(fit != null),
        assert(alignment != null),
+       assert(clipBehavior != null),
        _fit = fit,
        _alignment = alignment,
        _textDirection = textDirection,
+       _clipBehavior = clipBehavior,
        super(child);
 
   Alignment _resolvedAlignment;
@@ -2353,6 +2378,20 @@ class RenderFittedBox extends RenderProxyBox {
   bool _hasVisualOverflow;
   Matrix4 _transform;
 
+  /// {@macro flutter.widgets.Clip}
+  ///
+  /// Defaults to [Clip.none], and must not be null.
+  Clip get clipBehavior => _clipBehavior;
+  Clip _clipBehavior = Clip.none;
+  set clipBehavior(Clip value) {
+    assert(value != null);
+    if (value != _clipBehavior) {
+      _clipBehavior = value;
+      markNeedsPaint();
+      markNeedsSemanticsUpdate();
+    }
+  }
+
   void _clearPaintData() {
     _hasVisualOverflow = null;
     _transform = null;
@@ -2398,9 +2437,9 @@ class RenderFittedBox extends RenderProxyBox {
       return;
     _updatePaintData();
     if (child != null) {
-      if (_hasVisualOverflow)
+      if (_hasVisualOverflow && clipBehavior != Clip.none)
         layer = context.pushClipRect(needsCompositing, offset, Offset.zero & size, _paintChildWithTransform,
-            oldLayer: layer is ClipRectLayer ? layer as ClipRectLayer : null);
+            oldLayer: layer is ClipRectLayer ? layer as ClipRectLayer : null, clipBehavior: clipBehavior);
       else
         layer = _paintChildWithTransform(context, offset);
     }
@@ -2472,6 +2511,7 @@ class RenderFractionalTranslation extends RenderProxyBox {
       return;
     _translation = value;
     markNeedsPaint();
+    markNeedsSemanticsUpdate();
   }
 
   @override
@@ -2657,26 +2697,36 @@ class RenderPointerListener extends RenderProxyBoxWithHitTestBehavior {
 ///
 ///  * [MouseRegion], a widget that listens to hover events using
 ///    [RenderMouseRegion].
-class RenderMouseRegion extends RenderProxyBox {
+class RenderMouseRegion extends RenderProxyBox implements MouseTrackerAnnotation {
   /// Creates a render object that forwards pointer events to callbacks.
+  ///
+  /// All parameters are optional. By default this method creates an opaque
+  /// mouse region with no callbacks and cursor being [MouseCursor.defer]. The
+  /// [cursor] must not be null.
   RenderMouseRegion({
     PointerEnterEventListener onEnter,
     PointerHoverEventListener onHover,
     PointerExitEventListener onExit,
+    MouseCursor cursor = MouseCursor.defer,
     bool opaque = true,
     RenderBox child,
   }) : assert(opaque != null),
+       assert(cursor != null),
        _onEnter = onEnter,
        _onHover = onHover,
        _onExit = onExit,
+       _cursor = cursor,
        _opaque = opaque,
        _annotationIsActive = false,
-       super(child) {
-    _hoverAnnotation = MouseTrackerAnnotation(
-      onEnter: _handleEnter,
-      onHover: _handleHover,
-      onExit: _handleExit,
-    );
+       super(child);
+
+  @protected
+  @override
+  bool hitTestSelf(Offset position) => true;
+
+  @override
+  bool hitTest(BoxHitTestResult result, { @required Offset position }) {
+    return super.hitTest(result, position: position) && _opaque;
   }
 
   /// Whether this object should prevent [RenderMouseRegion]s visually behind it
@@ -2698,145 +2748,103 @@ class RenderMouseRegion extends RenderProxyBox {
   set opaque(bool value) {
     if (_opaque != value) {
       _opaque = value;
-      _updateAnnotations();
+      // A repaint is needed in order to propagate the new value to
+      // AnnotatedRegionLayer via [paint].
+      _markPropertyUpdated(mustRepaint: true);
     }
   }
 
-  /// Called when a mouse pointer enters the region (with or without buttons
-  /// pressed).
+  @override
   PointerEnterEventListener get onEnter => _onEnter;
+  PointerEnterEventListener _onEnter;
   set onEnter(PointerEnterEventListener value) {
     if (_onEnter != value) {
       _onEnter = value;
-      _updateAnnotations();
+      _markPropertyUpdated(mustRepaint: false);
     }
   }
-  PointerEnterEventListener _onEnter;
-  void _handleEnter(PointerEnterEvent event) {
-    if (_onEnter != null)
-      _onEnter(event);
-  }
 
-  /// Called when a pointer changes position without buttons pressed and the end
-  /// position is within the region.
+  @override
   PointerHoverEventListener get onHover => _onHover;
+  PointerHoverEventListener _onHover;
   set onHover(PointerHoverEventListener value) {
     if (_onHover != value) {
       _onHover = value;
-      _updateAnnotations();
+      _markPropertyUpdated(mustRepaint: false);
     }
   }
-  PointerHoverEventListener _onHover;
-  void _handleHover(PointerHoverEvent event) {
-    if (_onHover != null)
-      _onHover(event);
-  }
 
-  /// Called when a pointer leaves the region (with or without buttons pressed)
-  /// and the annotation is still attached.
+  @override
   PointerExitEventListener get onExit => _onExit;
+  PointerExitEventListener _onExit;
   set onExit(PointerExitEventListener value) {
     if (_onExit != value) {
       _onExit = value;
-      _updateAnnotations();
+      _markPropertyUpdated(mustRepaint: false);
     }
   }
-  PointerExitEventListener _onExit;
-  void _handleExit(PointerExitEvent event) {
-    if (_onExit != null)
-      _onExit(event);
+
+  @override
+  MouseCursor get cursor => _cursor;
+  MouseCursor _cursor;
+  set cursor(MouseCursor value) {
+    if (_cursor != value) {
+      _cursor = value;
+      // A repaint is needed in order to trigger a device update of
+      // [MouseTracker] so that this new value can be found.
+      _markPropertyUpdated(mustRepaint: true);
+    }
   }
 
-  // Object used for annotation of the layer used for hover hit detection.
-  MouseTrackerAnnotation _hoverAnnotation;
-
-  /// Object used for annotation of the layer used for hover hit detection.
-  ///
-  /// This is only public to allow for testing of Listener widgets. Do not call
-  /// in other contexts.
-  @visibleForTesting
-  MouseTrackerAnnotation get hoverAnnotation => _hoverAnnotation;
-
-  void _updateAnnotations() {
-    final bool annotationWasActive = _annotationIsActive;
-    final bool annotationWillBeActive = (
+  // Call this method when a property has changed and might affect the
+  // `_annotationIsActive` bit.
+  //
+  // If `mustRepaint` is false, this method does NOT call `markNeedsPaint`
+  // unless the `_annotationIsActive` bit is changed. If there is a property
+  // that needs updating while `_annotationIsActive` stays true, make
+  // `mustRepaint` true.
+  //
+  // This method must not be called during `paint`.
+  void _markPropertyUpdated({@required bool mustRepaint}) {
+    assert(owner == null || !owner.debugDoingPaint);
+    final bool newAnnotationIsActive = (
         _onEnter != null ||
         _onHover != null ||
         _onExit != null ||
+        _cursor != MouseCursor.defer ||
         opaque
-      ) &&
-      RendererBinding.instance.mouseTracker.mouseIsConnected;
-    if (annotationWasActive != annotationWillBeActive) {
+      ) && RendererBinding.instance.mouseTracker.mouseIsConnected;
+    _setAnnotationIsActive(newAnnotationIsActive);
+    if (mustRepaint)
+      markNeedsPaint();
+  }
+
+  bool _annotationIsActive = false;
+  void _setAnnotationIsActive(bool value) {
+    final bool annotationWasActive = _annotationIsActive;
+    _annotationIsActive = value;
+    if (annotationWasActive != value) {
       markNeedsPaint();
       markNeedsCompositingBitsUpdate();
-      if (annotationWillBeActive) {
-        RendererBinding.instance.mouseTracker.attachAnnotation(_hoverAnnotation);
-      } else {
-        RendererBinding.instance.mouseTracker.detachAnnotation(_hoverAnnotation);
-      }
-      _annotationIsActive = annotationWillBeActive;
     }
+  }
+
+  void _handleUpdatedMouseIsConnected() {
+    _markPropertyUpdated(mustRepaint: false);
   }
 
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
     // Add a listener to listen for changes in mouseIsConnected.
-    RendererBinding.instance.mouseTracker.addListener(_updateAnnotations);
-    _updateAnnotations();
-  }
-
-  /// Attaches the annotation for this render object, if any.
-  ///
-  /// This is called by the [MouseRegion]'s [Element] to tell this
-  /// [RenderMouseRegion] that it has transitioned from "inactive"
-  /// state to "active". We call it here so that
-  /// [MouseTrackerAnnotation.onEnter] isn't called during the build step for
-  /// the widget that provided the callback, and [State.setState] can safely be
-  /// called within that callback.
-  void postActivate() {
-    if (_annotationIsActive)
-      RendererBinding.instance.mouseTracker.attachAnnotation(_hoverAnnotation);
-  }
-
-  /// Detaches the annotation for this render object, if any.
-  ///
-  /// This is called by the [MouseRegion]'s [Element] to tell this
-  /// [RenderMouseRegion] that it will shortly be transitioned from "active"
-  /// state to "inactive". We call it here so that
-  /// [MouseTrackerAnnotation.onExit] isn't called during the build step for the
-  /// widget that provided the callback, and [State.setState] can safely be
-  /// called within that callback.
-  void preDeactivate() {
-    if (_annotationIsActive)
-      RendererBinding.instance.mouseTracker.detachAnnotation(_hoverAnnotation);
+    RendererBinding.instance.mouseTracker.addListener(_handleUpdatedMouseIsConnected);
+    _markPropertyUpdated(mustRepaint: false);
   }
 
   @override
   void detach() {
-    RendererBinding.instance.mouseTracker.removeListener(_updateAnnotations);
+    RendererBinding.instance.mouseTracker.removeListener(_handleUpdatedMouseIsConnected);
     super.detach();
-  }
-
-  bool _annotationIsActive;
-
-  @override
-  bool get needsCompositing => super.needsCompositing || _annotationIsActive;
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    if (_annotationIsActive) {
-      // Annotated region layers are not retained because they do not create engine layers.
-      final AnnotatedRegionLayer<MouseTrackerAnnotation> layer = AnnotatedRegionLayer<MouseTrackerAnnotation>(
-        _hoverAnnotation,
-        size: size,
-        offset: offset,
-        opaque: opaque,
-      );
-      context.pushLayer(layer, super.paint, offset);
-    } else {
-      super.paint(context, offset);
-    }
   }
 
   @override
@@ -2856,6 +2864,7 @@ class RenderMouseRegion extends RenderProxyBox {
       },
       ifEmpty: '<none>',
     ));
+    properties.add(DiagnosticsProperty<MouseCursor>('cursor', cursor, defaultValue: MouseCursor.defer));
     properties.add(DiagnosticsProperty<bool>('opaque', opaque, defaultValue: true));
   }
 }
@@ -4908,7 +4917,7 @@ class RenderFollowerLayer extends RenderProxyBox {
   ///
   /// When the render object is not linked, then: if [showWhenUnlinked] is true,
   /// the child is visible and not repositioned; if it is false, then child is
-  /// hidden.
+  /// hidden, and its hit testing is also disabled.
   bool get showWhenUnlinked => _showWhenUnlinked;
   bool _showWhenUnlinked;
   set showWhenUnlinked(bool value) {
@@ -4956,6 +4965,9 @@ class RenderFollowerLayer extends RenderProxyBox {
 
   @override
   bool hitTest(BoxHitTestResult result, { Offset position }) {
+    // Disables the hit testing if this render object is hidden.
+    if (link.leader == null && !showWhenUnlinked)
+      return false;
     // RenderFollowerLayer objects don't check if they are
     // themselves hit, because it's confusing to think about
     // how the untransformed size and the child's transformed

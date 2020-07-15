@@ -16,10 +16,12 @@ import 'build.dart';
 
 class BuildBundleCommand extends BuildSubCommand {
   BuildBundleCommand({bool verboseHelp = false, this.bundleBuilder}) {
+    addTreeShakeIconsFlag();
     usesTargetOption();
     usesFilesystemOptions(hide: !verboseHelp);
     usesBuildNumberOption();
     addBuildModeFlags(verboseHelp: verboseHelp);
+    usesExtraFrontendOptions();
     argParser
       ..addFlag(
         'precompiled',
@@ -48,18 +50,14 @@ class BuildBundleCommand extends BuildSubCommand {
           'windows-x64',
         ],
       )
-      ..addMultiOption(FlutterOptions.kExtraFrontEndOptions,
-        splitCommas: true,
-        hide: true,
-      )
+      ..addOption('asset-dir', defaultsTo: getAssetBuildDirectory())
       ..addMultiOption(FlutterOptions.kExtraGenSnapshotOptions,
         splitCommas: true,
         hide: true,
       )
-      ..addOption('asset-dir', defaultsTo: getAssetBuildDirectory())
       ..addFlag('report-licensed-packages',
         help: 'Whether to report the names of all the packages that are included '
-              'in the application\'s LICENSE file.',
+              "in the application's LICENSE file.",
         defaultsTo: false);
     usesPubOption();
     usesTrackWidgetCreation(verboseHelp: verboseHelp);
@@ -121,11 +119,11 @@ class BuildBundleCommand extends BuildSubCommand {
         break;
     }
 
-    final BuildMode buildMode = getBuildMode();
+    final BuildInfo buildInfo = getBuildInfo();
 
     await bundleBuilder.build(
       platform: platform,
-      buildMode: buildMode,
+      buildInfo: buildInfo,
       mainPath: targetFile,
       manifestPath: stringArg('manifest'),
       depfilePath: stringArg('depfile'),
@@ -134,10 +132,11 @@ class BuildBundleCommand extends BuildSubCommand {
       precompiledSnapshot: boolArg('precompiled'),
       reportLicensedPackages: boolArg('report-licensed-packages'),
       trackWidgetCreation: boolArg('track-widget-creation'),
-      extraFrontEndOptions: stringsArg(FlutterOptions.kExtraFrontEndOptions),
-      extraGenSnapshotOptions: stringsArg(FlutterOptions.kExtraGenSnapshotOptions),
+      extraFrontEndOptions: buildInfo.extraFrontEndOptions,
+      extraGenSnapshotOptions: buildInfo.extraGenSnapshotOptions,
       fileSystemScheme: stringArg('filesystem-scheme'),
       fileSystemRoots: stringsArg('filesystem-root'),
+      treeShakeIcons: buildInfo.treeShakeIcons,
     );
     return FlutterCommandResult.success();
   }

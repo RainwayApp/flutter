@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' show window;
 
 import 'package:flutter/gestures.dart';
@@ -164,12 +166,12 @@ void main() {
     expect(materialBox, paints..path(color: Color(customTheme.backgroundColor.value)));
     expect(material.elevation, customTheme.elevation);
     expect(material.shadowColor, customTheme.shadowColor);
-  }, skip: isBrowser);
+  });
 
   testWidgets('ChipThemeData generates correct opacities for defaults', (WidgetTester tester) async {
     const Color customColor1 = Color(0xcafefeed);
     const Color customColor2 = Color(0xdeadbeef);
-    final TextStyle customStyle = ThemeData.fallback().textTheme.body2.copyWith(color: customColor2);
+    final TextStyle customStyle = ThemeData.fallback().textTheme.bodyText1.copyWith(color: customColor2);
 
     final ChipThemeData lightTheme = ChipThemeData.fromDefaults(
       secondaryColor: customColor1,
@@ -182,7 +184,7 @@ void main() {
     expect(lightTheme.disabledColor, equals(Colors.black.withAlpha(0x0c)));
     expect(lightTheme.selectedColor, equals(Colors.black.withAlpha(0x3d)));
     expect(lightTheme.secondarySelectedColor, equals(customColor1.withAlpha(0x3d)));
-    expect(lightTheme.labelPadding, equals(const EdgeInsets.symmetric(horizontal: 8.0)));
+    expect(lightTheme.labelPadding, isNull);
     expect(lightTheme.padding, equals(const EdgeInsets.all(4.0)));
     expect(lightTheme.shape, isA<StadiumBorder>());
     expect(lightTheme.labelStyle.color, equals(Colors.black.withAlpha(0xde)));
@@ -200,7 +202,7 @@ void main() {
     expect(darkTheme.disabledColor, equals(Colors.white.withAlpha(0x0c)));
     expect(darkTheme.selectedColor, equals(Colors.white.withAlpha(0x3d)));
     expect(darkTheme.secondarySelectedColor, equals(customColor1.withAlpha(0x3d)));
-    expect(darkTheme.labelPadding, equals(const EdgeInsets.symmetric(horizontal: 8.0)));
+    expect(darkTheme.labelPadding, isNull);
     expect(darkTheme.padding, equals(const EdgeInsets.all(4.0)));
     expect(darkTheme.shape, isA<StadiumBorder>());
     expect(darkTheme.labelStyle.color, equals(Colors.white.withAlpha(0xde)));
@@ -218,7 +220,7 @@ void main() {
     expect(customTheme.disabledColor, equals(customColor1.withAlpha(0x0c)));
     expect(customTheme.selectedColor, equals(customColor1.withAlpha(0x3d)));
     expect(customTheme.secondarySelectedColor, equals(customColor2.withAlpha(0x3d)));
-    expect(customTheme.labelPadding, equals(const EdgeInsets.symmetric(horizontal: 8.0)));
+    expect(customTheme.labelPadding, isNull);
     expect(customTheme.padding, equals(const EdgeInsets.all(4.0)));
     expect(customTheme.shape, isA<StadiumBorder>());
     expect(customTheme.labelStyle.color, equals(customColor1.withAlpha(0xde)));
@@ -230,9 +232,10 @@ void main() {
     final ChipThemeData chipThemeBlack = ChipThemeData.fromDefaults(
       secondaryColor: Colors.black,
       brightness: Brightness.dark,
-      labelStyle: ThemeData.fallback().textTheme.body2.copyWith(color: Colors.black),
+      labelStyle: ThemeData.fallback().textTheme.bodyText1.copyWith(color: Colors.black),
     ).copyWith(
       elevation: 1.0,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 8.0),
       pressElevation: 4.0,
       shadowColor: Colors.black,
       selectedShadowColor: Colors.black,
@@ -241,7 +244,7 @@ void main() {
     final ChipThemeData chipThemeWhite = ChipThemeData.fromDefaults(
       secondaryColor: Colors.white,
       brightness: Brightness.light,
-      labelStyle: ThemeData.fallback().textTheme.body2.copyWith(color: Colors.white),
+      labelStyle: ThemeData.fallback().textTheme.bodyText1.copyWith(color: Colors.white),
     ).copyWith(
       padding: const EdgeInsets.all(2.0),
       labelPadding: const EdgeInsets.only(top: 8.0, bottom: 8.0),

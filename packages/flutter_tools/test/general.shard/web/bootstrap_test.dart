@@ -11,17 +11,13 @@ void main() {
     final String result = generateBootstrapScript(
       requireUrl: 'require.js',
       mapperUrl: 'mapper.js',
-      entrypoint: 'foo/bar/main.js',
     );
     // require js source is interpolated correctly.
     expect(result, contains('requireEl.src = "require.js";'));
     // stack trace mapper source is interpolated correctly.
     expect(result, contains('mapperEl.src = "mapper.js";'));
     // data-main is set to correct bootstrap module.
-    expect(result, contains('requireEl.setAttribute("data-main", "main_module");'));
-    // bootstrap main module has correct imports.
-    expect(result, contains('require(["foo/bar/main.js", "dart_sdk"],'
-      ' function(app, dart_sdk) {'));
+    expect(result, contains('requireEl.setAttribute("data-main", "main_module.bootstrap");'));
   });
 
   test('generateMainModule embeds urls correctly', () {
@@ -29,7 +25,7 @@ void main() {
       entrypoint: 'foo/bar/main.js',
     );
     // bootstrap main module has correct defined module.
-    expect(result, contains('define("main_module", ["foo/bar/main.js", "dart_sdk"], '
+    expect(result, contains('define("main_module.bootstrap", ["foo/bar/main.js", "dart_sdk"], '
       'function(app, dart_sdk) {'));
   });
 }

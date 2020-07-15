@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
@@ -198,7 +200,6 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
     if (pixels != value) {
       final double oldPixels = pixels;
       forcePixels(value);
-      notifyListeners();
       didStartScroll();
       didUpdateScrollPositionBy(pixels - oldPixels);
       didEndScroll();
@@ -213,7 +214,6 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
     if (pixels != value) {
       final double oldPixels = pixels;
       forcePixels(value);
-      notifyListeners();
       didStartScroll();
       didUpdateScrollPositionBy(pixels - oldPixels);
       didEndScroll();

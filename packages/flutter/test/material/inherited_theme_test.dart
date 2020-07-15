@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -73,8 +75,7 @@ void main() {
     }
 
     Color containerColor() {
-      final BoxDecoration decoration = tester.widget<Container>(find.byKey(primaryContainerKey)).decoration as BoxDecoration;
-      return decoration.color;
+      return tester.widget<Container>(find.byKey(primaryContainerKey)).color;
     }
 
     await tester.pumpWidget(buildFrame());
@@ -225,10 +226,9 @@ void main() {
     }
 
     Color bannerColor() {
-      final BoxDecoration decoration = tester.widget<Container>(
+      return tester.widget<Container>(
         find.descendant(of: find.byType(MaterialBanner), matching: find.byType(Container)).first,
-      ).decoration as BoxDecoration;
-      return decoration.color;
+      ).color;
     }
 
     TextStyle getTextStyle(String text) {
@@ -525,7 +525,7 @@ void main() {
     await tester.tap(find.text('push wrapped'));
     await tester.pumpAndSettle(); // route animation
     RenderBox sliderBox = tester.firstRenderObject<RenderBox>(find.byType(Slider));
-    expect(sliderBox, paints..rect(color: activeTrackColor)..rect(color: inactiveTrackColor));
+    expect(sliderBox, paints..rrect(color: activeTrackColor)..rrect(color: inactiveTrackColor));
     expect(sliderBox, paints..circle(color: thumbColor));
 
     Navigator.of(navigatorContext).pop();
@@ -534,7 +534,7 @@ void main() {
     await tester.tap(find.text('push unwrapped'));
     await tester.pumpAndSettle(); // route animation
     sliderBox = tester.firstRenderObject<RenderBox>(find.byType(Slider));
-    expect(sliderBox, isNot(paints..rect(color: activeTrackColor)..rect(color: inactiveTrackColor)));
+    expect(sliderBox, isNot(paints..rrect(color: activeTrackColor)..rrect(color: inactiveTrackColor)));
     expect(sliderBox, isNot(paints..circle(color: thumbColor)));
   });
 

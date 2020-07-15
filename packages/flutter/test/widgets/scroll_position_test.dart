@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 import 'dart:ui';
 
@@ -141,6 +143,25 @@ Future<void> performTest(WidgetTester tester, bool maintainState) async {
 }
 
 void main() {
+  testWidgets('ScrollPosition jumpTo() doesn\'t call notifyListeners twice', (WidgetTester tester) async {
+    int count = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: ListView.builder(
+        itemBuilder: (BuildContext context, int index) {
+          return Text('$index', textDirection: TextDirection.ltr);
+        },
+      ),
+    ));
+
+    final ScrollPosition position = tester.state<ScrollableState>(find.byType(Scrollable)).position;
+    position.addListener(() {
+      count++;
+    });
+    position.jumpTo(100);
+
+    expect(count, 1);
+  });
+
   testWidgets('whether we remember our scroll position', (WidgetTester tester) async {
     await performTest(tester, true);
     await performTest(tester, false);

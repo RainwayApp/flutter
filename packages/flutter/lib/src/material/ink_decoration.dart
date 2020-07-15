@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -145,7 +147,8 @@ class Ink extends StatefulWidget {
   ///
   /// The `image` argument must not be null. If there is no
   /// intention to render anything on this image, consider using a
-  /// [Container] with a [BoxDecoration.image] instead.
+  /// [Container] with a [BoxDecoration.image] instead. The `onImageError`
+  /// argument may be provided to listen for errors when resolving the image.
   ///
   /// The `alignment`, `repeat`, and `matchTextDirection` arguments must not
   /// be null either, but they have default values.
@@ -155,6 +158,7 @@ class Ink extends StatefulWidget {
     Key key,
     this.padding,
     @required ImageProvider image,
+    ImageErrorListener onImageError,
     ColorFilter colorFilter,
     BoxFit fit,
     AlignmentGeometry alignment = Alignment.center,
@@ -172,6 +176,7 @@ class Ink extends StatefulWidget {
        decoration = BoxDecoration(
          image: DecorationImage(
            image: image,
+           onError: onImageError,
            colorFilter: colorFilter,
            fit: fit,
            alignment: alignment,

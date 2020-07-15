@@ -23,7 +23,7 @@ void main() {
   });
 
   test('Copies assets to expected directory after building', () => testbed.run(() async {
-    when(buildSystem.build(any, any)).thenAnswer((Invocation invocation) async {
+    when(globals.buildSystem.build(any, any)).thenAnswer((Invocation invocation) async {
       final Environment environment = invocation.positionalArguments[1] as Environment;
       environment.outputDir.childFile('kernel_blob.bin').createSync(recursive: true);
       environment.outputDir.childFile('isolate_snapshot_data').createSync();
@@ -39,6 +39,7 @@ void main() {
       targetPlatform: TargetPlatform.ios,
       depfilePath: 'example.d',
       precompiled: false,
+      treeShakeIcons: false,
     );
     expect(globals.fs.file(globals.fs.path.join('example', 'kernel_blob.bin')).existsSync(), true);
     expect(globals.fs.file(globals.fs.path.join('example', 'LICENSE')).existsSync(), true);
@@ -46,7 +47,7 @@ void main() {
   }));
 
   test('Handles build system failure', () => testbed.run(() {
-    when(buildSystem.build(any, any)).thenAnswer((Invocation _) async {
+    when(globals.buildSystem.build(any, any)).thenAnswer((Invocation _) async {
       return BuildResult(
         success: false,
         exceptions: <String, ExceptionMeasurement>{},
@@ -61,6 +62,7 @@ void main() {
       targetPlatform: TargetPlatform.linux_x64,
       depfilePath: 'example.d',
       precompiled: false,
+      treeShakeIcons: false,
     ), throwsToolExit());
   }));
 }

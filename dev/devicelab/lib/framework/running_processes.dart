@@ -27,7 +27,7 @@ class RunningProcessInfo {
 
   @override
   int get hashCode {
-    // TODO(dnfield): Replace this when Object.hashValues lands.
+    // TODO(dnfield): Replace this when Object.hashValues lands, https://github.com/dart-lang/sdk/issues/11617
     int hash = 17;
     if (pid != null) {
       hash = hash * 23 + pid.hashCode;
@@ -85,11 +85,10 @@ Stream<RunningProcessInfo> windowsRunningProcesses(String processName) async* {
   // a process.
   // See: https://docs.microsoft.com/en-us/windows/desktop/cimwin32prov/win32-process
   final String script = processName != null
-      ? '"Get-CimInstance Win32_Process -Filter \\\"name=\'$processName\'\\\" | Select-Object ProcessId,CreationDate,CommandLine | Format-Table -AutoSize | Out-String -Width 4096"'
+      ? '"Get-CimInstance Win32_Process -Filter \\"name=\'$processName\'\\" | Select-Object ProcessId,CreationDate,CommandLine | Format-Table -AutoSize | Out-String -Width 4096"'
       : '"Get-CimInstance Win32_Process | Select-Object ProcessId,CreationDate,CommandLine | Format-Table -AutoSize | Out-String -Width 4096"';
   // Unfortunately, there doesn't seem to be a good way to get ProcessManager to
-  // run this. May be a bug in Dart.
-  // TODO(dnfield): fix this when https://github.com/dart-lang/sdk/issues/36175 is resolved.
+  // run this.
   final ProcessResult result = await Process.run(
     'powershell -command $script',
     <String>[],

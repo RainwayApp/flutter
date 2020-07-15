@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
@@ -49,8 +51,8 @@ Widget buildFrame(MultiChildLayoutDelegate delegate) {
   return Center(
     child: CustomMultiChildLayout(
       children: <Widget>[
-        LayoutId(id: 0, child: Container(width: 150.0, height: 100.0)),
-        LayoutId(id: 1, child: Container(width: 100.0, height: 200.0)),
+        LayoutId(id: 0, child: const SizedBox(width: 150.0, height: 100.0)),
+        LayoutId(id: 1, child: const SizedBox(width: 100.0, height: 200.0)),
       ],
       delegate: delegate,
     ),
@@ -225,13 +227,13 @@ void main() {
             id: 0,
             child: CustomMultiChildLayout(
               children: <Widget>[
-                LayoutId(id: 0, child: Container(width: 150.0, height: 100.0)),
-                LayoutId(id: 1, child: Container(width: 100.0, height: 200.0)),
+                LayoutId(id: 0, child: const SizedBox(width: 150.0, height: 100.0)),
+                LayoutId(id: 1, child: const SizedBox(width: 100.0, height: 200.0)),
               ],
               delegate: delegate,
             ),
           ),
-          LayoutId(id: 1, child: Container(width: 100.0, height: 200.0)),
+          LayoutId(id: 1, child: const SizedBox(width: 100.0, height: 200.0)),
         ],
         delegate: delegate,
       ),

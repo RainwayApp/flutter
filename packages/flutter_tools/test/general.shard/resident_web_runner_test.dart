@@ -4,30 +4,32 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:build_daemon/client.dart';
 import 'package:dwds/dwds.dart';
+import 'package:file/memory.dart';
 import 'package:flutter_tools/src/base/common.dart';
+import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
-import 'package:flutter_tools/src/base/net.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/terminal.dart';
 import 'package:flutter_tools/src/build_info.dart';
+import 'package:flutter_tools/src/build_runner/devfs_web.dart';
 import 'package:flutter_tools/src/build_runner/resident_web_runner.dart';
-import 'package:flutter_tools/src/build_runner/web_fs.dart';
 import 'package:flutter_tools/src/compile.dart';
+import 'package:flutter_tools/src/dart/pub.dart';
 import 'package:flutter_tools/src/devfs.dart';
 import 'package:flutter_tools/src/device.dart';
-import 'package:flutter_tools/src/features.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/project.dart';
 import 'package:flutter_tools/src/reporting/reporting.dart';
 import 'package:flutter_tools/src/resident_runner.dart';
+import 'package:flutter_tools/src/vmservice.dart';
 import 'package:flutter_tools/src/web/chrome.dart';
 import 'package:flutter_tools/src/web/web_device.dart';
-import 'package:meta/meta.dart';
 import 'package:mockito/mockito.dart';
-import 'package:platform/platform.dart';
+import 'package:vm_service/vm_service.dart' as vm_service;
 import 'package:vm_service/vm_service.dart';
 import 'package:webkit_inspection_protocol/webkit_inspection_protocol.dart';
 
@@ -35,12 +37,50 @@ import '../src/common.dart';
 import '../src/context.dart';
 import '../src/testbed.dart';
 
+const List<VmServiceExpectation> kAttachLogExpectations = <VmServiceExpectation>[
+  FakeVmServiceRequest(
+    method: 'streamListen',
+    args: <String, Object>{
+      'streamId': 'Stdout',
+    },
+  ),
+  FakeVmServiceRequest(
+    method: 'streamListen',
+    args: <String, Object>{
+      'streamId': 'Stderr',
+    },
+  )
+];
+
+const List<VmServiceExpectation> kAttachIsolateExpectations = <VmServiceExpectation>[
+  FakeVmServiceRequest(
+    method: 'streamListen',
+    args: <String, Object>{
+      'streamId': 'Isolate'
+    }
+  ),
+  FakeVmServiceRequest(
+    method: 'streamListen',
+    args: <String, Object>{
+      'streamId': 'Extension',
+    },
+  ),
+  FakeVmServiceRequest(
+    method: 'registerService',
+    args: <String, Object>{
+      'service': 'reloadSources',
+      'alias': 'FlutterTools',
+    }
+  )
+];
+
+const List<VmServiceExpectation> kAttachExpectations = <VmServiceExpectation>[
+  ...kAttachLogExpectations,
+  ...kAttachIsolateExpectations,
+];
+
 void main() {
-  Testbed testbed;
-  MockFlutterWebFs mockWebFs;
-  ResidentWebRunner residentWebRunner;
   MockDebugConnection mockDebugConnection;
-  MockVmService mockVmService;
   MockChromeDevice mockChromeDevice;
   MockAppConnection mockAppConnection;
   MockFlutterDevice mockFlutterDevice;
@@ -52,14 +92,16 @@ void main() {
   MockWipConnection mockWipConnection;
   MockWipDebugger mockWipDebugger;
   MockWebServerDevice mockWebServerDevice;
-  bool didSkipDwds;
+  MockDevice mockDevice;
+  FakeVmServiceHost fakeVmServiceHost;
+  FileSystem fileSystem;
+  ProcessManager processManager;
 
   setUp(() {
-    resetChromeForTesting();
-    mockWebFs = MockFlutterWebFs();
+    fileSystem = MemoryFileSystem.test();
+    processManager = FakeProcessManager.any();
     mockDebugConnection = MockDebugConnection();
-    mockVmService = MockVmService();
-    mockChromeDevice = MockChromeDevice();
+    mockDevice = MockDevice();
     mockAppConnection = MockAppConnection();
     mockFlutterDevice = MockFlutterDevice();
     mockWebDevFS = MockWebDevFS();
@@ -70,64 +112,45 @@ void main() {
     mockWipConnection = MockWipConnection();
     mockWipDebugger = MockWipDebugger();
     mockWebServerDevice = MockWebServerDevice();
-    when(mockFlutterDevice.device).thenReturn(mockChromeDevice);
-    testbed = Testbed(
-      setup: () {
-        residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
-          mockFlutterDevice,
-          flutterProject: FlutterProject.current(),
-          debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
-          ipv6: true,
-          stayResident: true,
-          dartDefines: const <String>[],
-          urlTunneller: null,
-        ) as ResidentWebRunner;
-        globals.fs.currentDirectory.childFile('.packages')
-          ..writeAsStringSync('\n');
-      },
-      overrides: <Type, Generator>{
-        WebFsFactory: () => ({
-          @required String target,
-          @required FlutterProject flutterProject,
-          @required BuildInfo buildInfo,
-          @required bool skipDwds,
-          @required bool initializePlatform,
-          @required String hostname,
-          @required String port,
-          @required List<String> dartDefines,
-          @required UrlTunneller urlTunneller,
-        }) async {
-          didSkipDwds = skipDwds;
-          return mockWebFs;
-        },
-      },
-    );
+    when(mockFlutterDevice.devFS).thenReturn(mockWebDevFS);
+    when(mockFlutterDevice.device).thenReturn(mockDevice);
+    when(mockWebDevFS.connect(any)).thenAnswer((Invocation invocation) async {
+      return ConnectionResult(mockAppConnection, mockDebugConnection);
+    });
+    fileSystem.file('.packages').writeAsStringSync('\n');
   });
 
   void _setupMocks() {
-    globals.fs.file('pubspec.yaml').createSync();
-    globals.fs.file(globals.fs.path.join('lib', 'main.dart')).createSync(recursive: true);
-    globals.fs.file(globals.fs.path.join('web', 'index.html')).createSync(recursive: true);
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
+    fileSystem.file('pubspec.yaml').createSync();
+    fileSystem.file('lib/main.dart').createSync(recursive: true);
+    fileSystem.file('web/index.html').createSync(recursive: true);
+    when(mockWebDevFS.update(
+      mainUri: anyNamed('mainUri'),
+      target: anyNamed('target'),
+      bundle: anyNamed('bundle'),
+      firstBuildTime: anyNamed('firstBuildTime'),
+      bundleFirstUpload: anyNamed('bundleFirstUpload'),
+      generator: anyNamed('generator'),
+      fullRestart: anyNamed('fullRestart'),
+      dillOutputPath: anyNamed('dillOutputPath'),
+      projectRootPath: anyNamed('projectRootPath'),
+      pathToReload: anyNamed('pathToReload'),
+      invalidatedFiles: anyNamed('invalidatedFiles'),
+      trackWidgetCreation: anyNamed('trackWidgetCreation'),
+      packageConfig: anyNamed('packageConfig'),
+    )).thenAnswer((Invocation _) async {
+      return UpdateFSReport(success: true,  syncedBytes: 0)..invalidatedModules = <String>[];
     });
-    when(mockWebFs.recompile()).thenAnswer((Invocation _) {
-      return Future<bool>.value(false);
+    when(mockDebugConnection.vmService).thenAnswer((Invocation invocation) {
+      return fakeVmServiceHost.vmService;
     });
-    when(mockWebFs.uri).thenReturn('http://localhost:8765/app/');
-    when(mockDebugConnection.vmService).thenReturn(mockVmService);
     when(mockDebugConnection.onDone).thenAnswer((Invocation invocation) {
       return Completer<void>().future;
-    });
-    when(mockVmService.onStdoutEvent).thenAnswer((Invocation _) {
-      return const Stream<Event>.empty();
-    });
-    when(mockVmService.onDebugEvent).thenAnswer((Invocation _) {
-      return const Stream<Event>.empty();
     });
     when(mockDebugConnection.uri).thenReturn('ws://127.0.0.1/abcd/');
     when(mockFlutterDevice.devFS).thenReturn(mockWebDevFS);
     when(mockWebDevFS.sources).thenReturn(<Uri>[]);
+    when(mockWebDevFS.baseUri).thenReturn(Uri.parse('http://localhost:12345'));
     when(mockFlutterDevice.generator).thenReturn(mockResidentCompiler);
     when(mockChrome.chromeConnection).thenReturn(mockChromeConnection);
     when(mockChromeConnection.getTab(any)).thenAnswer((Invocation invocation) async {
@@ -139,110 +162,125 @@ void main() {
     when(mockWipConnection.debugger).thenReturn(mockWipDebugger);
   }
 
-  test('runner with web server device does not support debugging without --start-paused', () => testbed.run(() {
-    when(mockFlutterDevice.device).thenReturn(WebServerDevice());
+  testUsingContext('runner with web server device does not support debugging without --start-paused', () {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    when(mockFlutterDevice.device).thenReturn(WebServerDevice(
+      logger: BufferLogger.test(),
+    ));
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     final ResidentRunner profileResidentWebRunner = DwdsWebRunnerFactory().createWebRunner(
       mockFlutterDevice,
       flutterProject: FlutterProject.current(),
       debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
       ipv6: true,
       stayResident: true,
-      dartDefines: const <String>[],
       urlTunneller: null,
     ) as ResidentWebRunner;
 
     expect(profileResidentWebRunner.debuggingEnabled, false);
 
     when(mockFlutterDevice.device).thenReturn(MockChromeDevice());
+
     expect(residentWebRunner.debuggingEnabled, true);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('runner with web server device does not initialize dwds', () => testbed.run(() async {
+  testUsingContext('runner with web server device supports debugging with --start-paused', () {
+    fileSystem.file('.packages')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('\n');
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     _setupMocks();
-    when(mockFlutterDevice.device).thenReturn(WebServerDevice());
-
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    unawaited(residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
+    when(mockFlutterDevice.device).thenReturn(WebServerDevice(
+      logger: BufferLogger.test(),
     ));
-    await connectionInfoCompleter.future;
-
-    expect(didSkipDwds, true);
-  }));
-
-  test('runner with web server device supports debugging with --start-paused', () => testbed.run(() {
-    when(mockFlutterDevice.device).thenReturn(WebServerDevice());
     final ResidentRunner profileResidentWebRunner = DwdsWebRunnerFactory().createWebRunner(
       mockFlutterDevice,
       flutterProject: FlutterProject.current(),
       debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug, startPaused: true),
       ipv6: true,
       stayResident: true,
-      dartDefines: <String>[],
       urlTunneller: null,
     );
 
+    expect(profileResidentWebRunner.uri, mockWebDevFS.baseUri);
     expect(profileResidentWebRunner.debuggingEnabled, true);
-  }));
-
-  test('runner with web server device uses debug extension with --start-paused', () => testbed.run(() async {
-    _setupMocks();
-    when(mockFlutterDevice.device).thenReturn(WebServerDevice());
-    final ResidentWebRunner runner = DwdsWebRunnerFactory().createWebRunner(
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+  testUsingContext('profile does not supportsServiceProtocol', () {
+    fileSystem.file('.packages')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('\n');
+    final ResidentRunner residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
       mockFlutterDevice,
       flutterProject: FlutterProject.current(),
-      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug, startPaused: true),
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
       ipv6: true,
       stayResident: true,
-      dartDefines: <String>[],
       urlTunneller: null,
     ) as ResidentWebRunner;
-
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-     unawaited(runner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ));
-    await connectionInfoCompleter.future;
-
-    // Check connect() was told to use the debug extension.
-    verify(mockWebFs.connect(true)).called(1);
-    // And ensure the debug services was started.
-    expect(testLogger.statusText, contains('Debug service listening on'));
-  }));
-
-  test('profile does not supportsServiceProtocol', () => testbed.run(() {
-     when(mockFlutterDevice.device).thenReturn(mockChromeDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
+    when(mockFlutterDevice.device).thenReturn(mockChromeDevice);
     final ResidentRunner profileResidentWebRunner = DwdsWebRunnerFactory().createWebRunner(
       mockFlutterDevice,
       flutterProject: FlutterProject.current(),
       debuggingOptions: DebuggingOptions.enabled(BuildInfo.profile),
       ipv6: true,
       stayResident: true,
-      dartDefines: const <String>[],
       urlTunneller: null,
     );
 
     expect(profileResidentWebRunner.supportsServiceProtocol, false);
     expect(residentWebRunner.supportsServiceProtocol, true);
-  }));
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Exits on run if application does not support the web', () => testbed.run(() async {
-    globals.fs.file('pubspec.yaml').createSync();
+  testUsingContext('Exits on run if target file does not exist', () async {
+    fileSystem.file('.packages')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('\n');
+    final ResidentRunner residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
+      mockFlutterDevice,
+      flutterProject: FlutterProject.current(),
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+      ipv6: true,
+      stayResident: true,
+      urlTunneller: null,
+    ) as ResidentWebRunner;
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
+    fileSystem.file('pubspec.yaml').createSync();
+    fileSystem.file(fileSystem.path.join('web', 'index.html'))
+      .createSync(recursive: true);
 
     expect(await residentWebRunner.run(), 1);
-    expect(testLogger.errorText, contains('This application is not configured to build on the web'));
-  }));
-
-  test('Exits on run if target file does not exist', () => testbed.run(() async {
-    globals.fs.file('pubspec.yaml').createSync();
-    globals.fs.file(globals.fs.path.join('web', 'index.html')).createSync(recursive: true);
-
-    expect(await residentWebRunner.run(), 1);
-    final String absoluteMain = globals.fs.path.absolute(globals.fs.path.join('lib', 'main.dart'));
+    final String absoluteMain = fileSystem.path.absolute(fileSystem.path.join('lib', 'main.dart'));
     expect(testLogger.errorText, contains('Tried to run $absoluteMain, but that file does not exist.'));
-  }));
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Can successfully run and connect to vmservice', () => testbed.run(() async {
+  testUsingContext('Can successfully run and connect to vmservice', () async {
+    fileSystem.file('.packages')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('\n');
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: kAttachExpectations.toList());
     _setupMocks();
     final DelegateLogger delegateLogger = globals.logger as DelegateLogger;
     final BufferLogger bufferLogger = delegateLogger.delegate as BufferLogger;
@@ -255,119 +293,284 @@ void main() {
     final DebugConnectionInfo debugConnectionInfo = await connectionInfoCompleter.future;
 
     verify(mockAppConnection.runMain()).called(1);
-    verify(mockVmService.registerService('reloadSources', 'FlutterTools')).called(1);
-    verify(status.stop()).called(2);
+    verify(status.stop()).called(1);
+    verify(pub.get(
+      context: PubContext.pubGet,
+      directory: anyNamed('directory'),
+    )).called(1);
 
     expect(bufferLogger.statusText, contains('Debug service listening on ws://127.0.0.1/abcd/'));
     expect(debugConnectionInfo.wsUri.toString(), 'ws://127.0.0.1/abcd/');
   }, overrides: <Type, Generator>{
-    Logger: () => DelegateLogger(BufferLogger(
-      terminal: AnsiTerminal(
-        stdio: null,
-        platform: const LocalPlatform(),
-      ),
-      outputPreferences: OutputPreferences.test(),
-    )),
-  }));
+    Logger: () => DelegateLogger(BufferLogger.test()),
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Can successfully run and disconnect with --no-resident', () => testbed.run(() async {
+  testUsingContext('WebRunner copies compiled app.dill to cache during startup', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: kAttachExpectations.toList());
     _setupMocks();
-    residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
+
+    residentWebRunner.artifactDirectory.childFile('app.dill').writeAsStringSync('ABC');
+    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
+    unawaited(residentWebRunner.run(
+      connectionInfoCompleter: connectionInfoCompleter,
+    ));
+    await connectionInfoCompleter.future;
+
+    expect(await fileSystem.file(fileSystem.path.join('build', 'cache.dill')).readAsString(), 'ABC');
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/60613
+  testUsingContext('ResidentWebRunner calls appFailedToStart if initial compilation fails', () async {
+    _setupMocks();
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fileSystem.file(globals.fs.path.join('lib', 'main.dart'))
+      .createSync(recursive: true);
+    fakeVmServiceHost = FakeVmServiceHost(requests: kAttachExpectations.toList());
+    when(mockWebDevFS.update(
+      mainUri: anyNamed('mainUri'),
+      target: anyNamed('target'),
+      bundle: anyNamed('bundle'),
+      firstBuildTime: anyNamed('firstBuildTime'),
+      bundleFirstUpload: anyNamed('bundleFirstUpload'),
+      generator: anyNamed('generator'),
+      fullRestart: anyNamed('fullRestart'),
+      dillOutputPath: anyNamed('dillOutputPath'),
+      projectRootPath: anyNamed('projectRootPath'),
+      pathToReload: anyNamed('pathToReload'),
+      invalidatedFiles: anyNamed('invalidatedFiles'),
+      trackWidgetCreation: anyNamed('trackWidgetCreation'),
+      packageConfig: anyNamed('packageConfig'),
+    )).thenAnswer((Invocation _) async {
+      return UpdateFSReport(success: false, syncedBytes: 0)..invalidatedModules = <String>[];
+    });
+
+    expect(await residentWebRunner.run(), 1);
+    // Completing this future ensures that the daemon can exit correctly.
+    expect(await residentWebRunner.waitForAppToFinish(), 1);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+
+  testUsingContext('Can successfully run without an index.html including status warning', () async {
+    fakeVmServiceHost = FakeVmServiceHost(requests: kAttachExpectations.toList());
+    _setupMocks();
+    fileSystem.file(fileSystem.path.join('web', 'index.html'))
+      .deleteSync();
+    final ResidentWebRunner residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
       mockFlutterDevice,
       flutterProject: FlutterProject.current(),
       debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
       ipv6: true,
       stayResident: false,
-      dartDefines: const <String>[],
       urlTunneller: null,
     ) as ResidentWebRunner;
 
     expect(await residentWebRunner.run(), 0);
-  }));
+    expect(testLogger.statusText,
+      contains('This application is not configured to build on the web'));
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Listens to stdout streams before running main', () => testbed.run(() async {
+  testUsingContext('Can successfully run and disconnect with --no-resident', () async {
+    fakeVmServiceHost = FakeVmServiceHost(requests: kAttachExpectations.toList());
+    _setupMocks();
+    final ResidentRunner residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
+      mockFlutterDevice,
+      flutterProject: FlutterProject.current(),
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+      ipv6: true,
+      stayResident: false,
+      urlTunneller: null,
+    ) as ResidentWebRunner;
+
+    expect(await residentWebRunner.run(), 0);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+
+  testUsingContext('Listens to stdout and stderr streams before running main', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachLogExpectations,
+      FakeVmServiceStreamResponse(
+        streamId: 'Stdout',
+        event: vm_service.Event(
+          timestamp: 0,
+          kind: vm_service.EventStreams.kStdout,
+          bytes: base64.encode(utf8.encode('THIS MESSAGE IS IMPORTANT'))
+        ),
+      ),
+      FakeVmServiceStreamResponse(
+        streamId: 'Stderr',
+        event: vm_service.Event(
+          timestamp: 0,
+          kind: vm_service.EventStreams.kStderr,
+          bytes: base64.encode(utf8.encode('SO IS THIS'))
+        ),
+      ),
+      ...kAttachIsolateExpectations,
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final StreamController<Event> controller = StreamController<Event>.broadcast();
-    when(mockVmService.onStdoutEvent).thenAnswer((Invocation _) {
-      return controller.stream;
-    });
-    when(mockAppConnection.runMain()).thenAnswer((Invocation invocation) {
-      controller.add(Event.parse(<String, Object>{
-        'type': 'Event',
-        'kind': 'WriteEvent',
-        'timestamp': 1569473488296,
-        'bytes': base64.encode('THIS MESSAGE IS IMPORTANT'.codeUnits),
-      }));
-    });
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
 
     expect(testLogger.statusText, contains('THIS MESSAGE IS IMPORTANT'));
-  }));
+    expect(testLogger.statusText, contains('SO IS THIS'));
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Does not run main with --start-paused', () => testbed.run(() async {
-    residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
+  testUsingContext('Listens to extension events with structured errors', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    final Map<String, String> extensionData = <String, String>{
+      'test': 'data',
+      'renderedErrorText': 'error text',
+    };
+    final Map<String, String> emptyExtensionData = <String, String>{
+      'test': 'data',
+      'renderedErrorText': '',
+    };
+    final Map<String, String> nonStructuredErrorData = <String, String>{
+      'other': 'other stuff',
+    };
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      FakeVmServiceStreamResponse(
+        streamId: 'Extension',
+        event: vm_service.Event(
+          timestamp: 0,
+          extensionKind: 'Flutter.Error',
+          extensionData: vm_service.ExtensionData.parse(extensionData),
+          kind: vm_service.EventStreams.kExtension,
+        ),
+      ),
+      // Empty error text should not break anything.
+      FakeVmServiceStreamResponse(
+        streamId: 'Extension',
+        event: vm_service.Event(
+          timestamp: 0,
+          extensionKind: 'Flutter.Error',
+          extensionData: vm_service.ExtensionData.parse(emptyExtensionData),
+          kind: vm_service.EventStreams.kExtension,
+        ),
+      ),
+      // This is not Flutter.Error kind data, so it should not be logged.
+      FakeVmServiceStreamResponse(
+        streamId: 'Extension',
+        event: vm_service.Event(
+          timestamp: 0,
+          extensionKind: 'Other',
+          extensionData: vm_service.ExtensionData.parse(nonStructuredErrorData),
+          kind: vm_service.EventStreams.kExtension,
+        ),
+      ),
+    ]);
+
+    _setupMocks();
+    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
+    unawaited(residentWebRunner.run(
+      connectionInfoCompleter: connectionInfoCompleter,
+    ));
+    await connectionInfoCompleter.future;
+
+    // Need these to run events, otherwise expect statements below run before
+    // structured errors are processed.
+    await null;
+    await null;
+    await null;
+
+    expect(testLogger.statusText, contains('\nerror text'));
+    expect(testLogger.statusText, isNot(contains('other stuff')));
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+
+  testUsingContext('Does not run main with --start-paused', () async {
+    final ResidentRunner residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
       mockFlutterDevice,
       flutterProject: FlutterProject.current(),
       debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug, startPaused: true),
       ipv6: true,
       stayResident: true,
-      dartDefines: const <String>[],
       urlTunneller: null,
     ) as ResidentWebRunner;
+    fakeVmServiceHost = FakeVmServiceHost(requests: kAttachExpectations.toList());
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final StreamController<Event> controller = StreamController<Event>.broadcast();
-    when(mockVmService.onStdoutEvent).thenAnswer((Invocation _) {
-      return controller.stream;
-    });
+
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
 
     verifyNever(mockAppConnection.runMain());
-  }));
-
-  test('Can hot reload after attaching', () => testbed.run(() async {
-    _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    unawaited(residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ));
-    await connectionInfoCompleter.future;
-    when(mockWebFs.recompile()).thenAnswer((Invocation invocation) async {
-      return true;
-    });
-    when(mockVmService.callServiceExtension('hotRestart')).thenAnswer((Invocation _) async {
-      return Response.parse(<String, Object>{'type': 'Success'});
-    });
-    final OperationResult result = await residentWebRunner.restart(fullRestart: false);
-
-    expect(testLogger.statusText, contains('Reloaded application in'));
-    expect(result.code, 0);
-	  // ensure that analytics are sent.
-    verify(Usage.instance.sendEvent('hot', 'restart', parameters: <String, String>{
-      'cd27': 'web-javascript',
-      'cd28': null,
-      'cd29': 'false',
-      'cd30': 'true',
-    })).called(1);
-    verify(Usage.instance.sendTiming('hot', 'web-restart', any)).called(1);
-    verify(Usage.instance.sendTiming('hot', 'web-refresh', any)).called(1);
-    verify(Usage.instance.sendTiming('hot', 'web-recompile', any)).called(1);
   }, overrides: <Type, Generator>{
-    Usage: () => MockFlutterUsage(),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Can hot reload after attaching - experimental', () => testbed.run(() async {
+  testUsingContext('Can hot reload after attaching', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'hotRestart',
+        jsonResponse: <String, Object>{
+          'type': 'Success',
+        }
+      ),
+    ]);
     _setupMocks();
-    launchChromeInstance(mockChrome);
+    final ChromiumLauncher chromiumLauncher = MockChromeLauncher();
+    when(chromiumLauncher.launch(any, cacheDir: anyNamed('cacheDir')))
+      .thenAnswer((Invocation invocation) async {
+        return mockChrome;
+      });
+    when(chromiumLauncher.connectedInstance).thenAnswer((Invocation invocation) async {
+      return mockChrome;
+    });
+    when(mockFlutterDevice.device).thenReturn(GoogleChromeDevice(
+      fileSystem: fileSystem,
+      chromiumLauncher: chromiumLauncher,
+      logger: globals.logger,
+      platform: FakePlatform(operatingSystem: 'linux'),
+      processManager: FakeProcessManager.any(),
+    ));
+    when(chromiumLauncher.canFindExecutable()).thenReturn(true);
+    chromiumLauncher.testLaunchChromium(mockChrome);
     when(mockWebDevFS.update(
-      mainPath: anyNamed('mainPath'),
+      mainUri: anyNamed('mainUri'),
       target: anyNamed('target'),
       bundle: anyNamed('bundle'),
       firstBuildTime: anyNamed('firstBuildTime'),
@@ -379,9 +582,10 @@ void main() {
       projectRootPath: anyNamed('projectRootPath'),
       pathToReload: anyNamed('pathToReload'),
       invalidatedFiles: anyNamed('invalidatedFiles'),
+      packageConfig: anyNamed('packageConfig'),
     )).thenAnswer((Invocation invocation) async {
       // Generated entrypoint file in temp dir.
-      expect(invocation.namedArguments[#mainPath], contains('entrypoint.dart'));
+      expect(invocation.namedArguments[#mainUri].toString(), contains('entrypoint.dart'));
       return UpdateFSReport(success: true)
         ..invalidatedModules = <String>['example'];
     });
@@ -395,27 +599,60 @@ void main() {
 
     final OperationResult result = await residentWebRunner.restart(fullRestart: false);
 
-    expect(testLogger.statusText, contains('Reloaded application in'));
+    expect(testLogger.statusText, contains('Restarted application in'));
     expect(result.code, 0);
     verify(mockResidentCompiler.accept()).called(2);
 	  // ensure that analytics are sent.
-    verify(Usage.instance.sendEvent('hot', 'restart', parameters: <String, String>{
-      'cd27': 'web-javascript',
-      'cd28': null,
-      'cd29': 'false',
-      'cd30': 'true',
-    })).called(1);
-    verify(Usage.instance.sendTiming('hot', 'web-incremental-restart', any)).called(1);
+    final Map<String, String> config = verify(globals.flutterUsage.sendEvent('hot', 'restart',
+      parameters: captureAnyNamed('parameters'))).captured.first as Map<String, String>;
+
+    expect(config, allOf(<Matcher>[
+      containsPair('cd27', 'web-javascript'),
+      containsPair('cd28', ''),
+      containsPair('cd29', 'false'),
+      containsPair('cd30', 'true'),
+    ]));
+    verify(globals.flutterUsage.sendTiming('hot', 'web-incremental-restart', any)).called(1);
   }, overrides: <Type, Generator>{
     Usage: () => MockFlutterUsage(),
-    FeatureFlags: () => TestFeatureFlags(isWebIncrementalCompilerEnabled: true),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Can hot restart after attaching - experimental', () => testbed.run(() async {
+  testUsingContext('Can hot restart after attaching', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'hotRestart',
+        jsonResponse: <String, Object>{
+          'type': 'Success',
+        }
+      ),
+    ]);
     _setupMocks();
-    launchChromeInstance(mockChrome);
+    final ChromiumLauncher chromiumLauncher = MockChromeLauncher();
+    when(chromiumLauncher.launch(any, cacheDir: anyNamed('cacheDir')))
+      .thenAnswer((Invocation invocation) async {
+        return mockChrome;
+      });
+    when(chromiumLauncher.connectedInstance).thenAnswer((Invocation invocation) async {
+      return mockChrome;
+    });
+    when(chromiumLauncher.canFindExecutable()).thenReturn(true);
+    when(mockFlutterDevice.device).thenReturn(GoogleChromeDevice(
+      fileSystem: fileSystem,
+      chromiumLauncher: chromiumLauncher,
+      logger: globals.logger,
+      platform: FakePlatform(operatingSystem: 'linux'),
+      processManager: FakeProcessManager.any(),
+    ));
+    chromiumLauncher.testLaunchChromium(mockChrome);
+    Uri entrypointFileUri;
     when(mockWebDevFS.update(
-      mainPath: anyNamed('mainPath'),
+      mainUri: anyNamed('mainUri'),
       target: anyNamed('target'),
       bundle: anyNamed('bundle'),
       firstBuildTime: anyNamed('firstBuildTime'),
@@ -427,7 +664,9 @@ void main() {
       projectRootPath: anyNamed('projectRootPath'),
       pathToReload: anyNamed('pathToReload'),
       invalidatedFiles: anyNamed('invalidatedFiles'),
+      packageConfig: anyNamed('packageConfig'),
     )).thenAnswer((Invocation invocation) async {
+      entrypointFileUri = invocation.namedArguments[#mainUri] as Uri;
       return UpdateFSReport(success: true)
         ..invalidatedModules = <String>['example'];
     });
@@ -438,27 +677,42 @@ void main() {
     await connectionInfoCompleter.future;
     final OperationResult result = await residentWebRunner.restart(fullRestart: true);
 
+    // Ensure that generated entrypoint is generated correctly.
+    expect(entrypointFileUri, isNotNull);
+    final String entrypointContents = fileSystem.file(entrypointFileUri).readAsStringSync();
+    expect(entrypointContents, contains('// Flutter web bootstrap script'));
+    expect(entrypointContents, contains("import 'dart:ui' as ui;"));
+    expect(entrypointContents, contains('await ui.webOnlyInitializePlatform();'));
+
     expect(testLogger.statusText, contains('Restarted application in'));
     expect(result.code, 0);
     verify(mockResidentCompiler.accept()).called(2);
 	  // ensure that analytics are sent.
-    verify(Usage.instance.sendEvent('hot', 'restart', parameters: <String, String>{
-      'cd27': 'web-javascript',
-      'cd28': null,
-      'cd29': 'false',
-      'cd30': 'true',
-    })).called(1);
-    verifyNever(Usage.instance.sendTiming('hot', 'web-incremental-restart', any));
+    final Map<String, String> config = verify(globals.flutterUsage.sendEvent('hot', 'restart',
+      parameters: captureAnyNamed('parameters'))).captured.first as Map<String, String>;
+
+    expect(config, allOf(<Matcher>[
+      containsPair('cd27', 'web-javascript'),
+      containsPair('cd28', ''),
+      containsPair('cd29', 'false'),
+      containsPair('cd30', 'true'),
+    ]));
+    verify(globals.flutterUsage.sendTiming('hot', 'web-incremental-restart', any)).called(1);
   }, overrides: <Type, Generator>{
     Usage: () => MockFlutterUsage(),
-    FeatureFlags: () => TestFeatureFlags(isWebIncrementalCompilerEnabled: true),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Can hot restart after attaching - experimental with web-server device', () => testbed.run(() async {
+  testUsingContext('Can hot restart after attaching with web-server device', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests :kAttachExpectations);
     _setupMocks();
     when(mockFlutterDevice.device).thenReturn(mockWebServerDevice);
     when(mockWebDevFS.update(
-      mainPath: anyNamed('mainPath'),
+      mainUri: anyNamed('mainUri'),
       target: anyNamed('target'),
       bundle: anyNamed('bundle'),
       firstBuildTime: anyNamed('firstBuildTime'),
@@ -470,6 +724,7 @@ void main() {
       projectRootPath: anyNamed('projectRootPath'),
       pathToReload: anyNamed('pathToReload'),
       invalidatedFiles: anyNamed('invalidatedFiles'),
+      packageConfig: anyNamed('packageConfig'),
     )).thenAnswer((Invocation invocation) async {
       return UpdateFSReport(success: true)
         ..invalidatedModules = <String>['example'];
@@ -485,166 +740,238 @@ void main() {
     expect(result.code, 0);
     verify(mockResidentCompiler.accept()).called(2);
     // ensure that analytics are sent.
-    verify(Usage.instance.sendEvent('hot', 'restart', parameters: <String, String>{
-      'cd27': 'web-javascript',
-      'cd28': null,
-      'cd29': 'false',
-      'cd30': 'true',
-    })).called(1);
-    verifyNever(Usage.instance.sendTiming('hot', 'web-incremental-restart', any));
+    verifyNever(globals.flutterUsage.sendTiming('hot', 'web-incremental-restart', any));
   }, overrides: <Type, Generator>{
     Usage: () => MockFlutterUsage(),
-    FeatureFlags: () => TestFeatureFlags(isWebIncrementalCompilerEnabled: true),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('experimental resident runner is not debuggable', () => testbed.run(() {
-    expect(residentWebRunner.debuggingEnabled, false);
+  testUsingContext('web resident runner is debuggable', () {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: kAttachExpectations.toList());
+
+    expect(residentWebRunner.debuggingEnabled, true);
   }, overrides: <Type, Generator>{
-    FeatureFlags: () => TestFeatureFlags(isWebIncrementalCompilerEnabled: true),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Can hot restart after attaching', () => testbed.run(() async {
+  testUsingContext('web resident runner can toggle CanvasKit', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
+    final WebAssetServer webAssetServer = WebAssetServer(null, null, null, null, null, null);
+    when(mockWebDevFS.webAssetServer).thenReturn(webAssetServer);
+
+    expect(residentWebRunner.supportsCanvasKit, true);
+    expect(webAssetServer.canvasKitRendering, false);
+
+    final bool toggleResult = await residentWebRunner.toggleCanvaskit();
+
+    expect(webAssetServer.canvasKitRendering, true);
+    expect(toggleResult, true);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+
+  testUsingContext('Exits when initial compile fails', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
+    _setupMocks();
+    when(mockWebDevFS.update(
+      mainUri: anyNamed('mainUri'),
+      target: anyNamed('target'),
+      bundle: anyNamed('bundle'),
+      firstBuildTime: anyNamed('firstBuildTime'),
+      bundleFirstUpload: anyNamed('bundleFirstUpload'),
+      generator: anyNamed('generator'),
+      fullRestart: anyNamed('fullRestart'),
+      dillOutputPath: anyNamed('dillOutputPath'),
+      projectRootPath: anyNamed('projectRootPath'),
+      pathToReload: anyNamed('pathToReload'),
+      invalidatedFiles: anyNamed('invalidatedFiles'),
+      packageConfig: anyNamed('packageConfig'),
+      trackWidgetCreation: anyNamed('trackWidgetCreation'),
+    )).thenAnswer((Invocation _) async {
+      return UpdateFSReport(success: false,  syncedBytes: 0)..invalidatedModules = <String>[];
+    });
+    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
+    unawaited(residentWebRunner.run(
+      connectionInfoCompleter: connectionInfoCompleter,
+    ));
+
+    expect(await residentWebRunner.run(), 1);
+    verifyNever(globals.flutterUsage.sendTiming('hot', 'web-restart', any));
+  }, overrides: <Type, Generator>{
+    Usage: () => MockFlutterUsage(),
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+
+  testUsingContext('Faithfully displays stdout messages with leading/trailing spaces', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachLogExpectations,
+      FakeVmServiceStreamResponse(
+        streamId: 'Stdout',
+        event: vm_service.Event(
+          timestamp: 0,
+          kind: vm_service.EventStreams.kStdout,
+          bytes: base64.encode(
+            utf8.encode('    This is a message with 4 leading and trailing spaces    '),
+          ),
+        ),
+      ),
+      ...kAttachIsolateExpectations,
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockWebFs.recompile()).thenAnswer((Invocation invocation) async {
-      return true;
-    });
-    when(mockVmService.callServiceExtension('fullReload')).thenAnswer((Invocation _) async {
-      return Response.parse(<String, Object>{'type': 'Success'});
-    });
-    final OperationResult result = await residentWebRunner.restart(fullRestart: true);
 
-    expect(testLogger.statusText, contains('Restarted application in'));
-    expect(result.code, 0);
-	  // ensure that analytics are sent.
-    verify(Usage.instance.sendEvent('hot', 'restart', parameters: <String, String>{
-      'cd27': 'web-javascript',
-      'cd28': null,
-      'cd29': 'false',
-      'cd30': 'true',
-    })).called(1);
-    verifyNever(Usage.instance.sendTiming('hot', 'web-restart', any));
-    verifyNever(Usage.instance.sendTiming('hot', 'web-refresh', any));
-    verify(Usage.instance.sendTiming('hot', 'web-recompile', any)).called(1);
+    expect(testLogger.statusText,
+      contains('    This is a message with 4 leading and trailing spaces    '));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
   }, overrides: <Type, Generator>{
-    Usage: () => MockFlutterUsage(),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Selects Dwds runner in profile mode with incremental compiler enabled', () => testbed.run(() async {
-    final ResidentWebRunner residentWebRunner = DwdsWebRunnerFactory().createWebRunner(
-      mockFlutterDevice,
-      flutterProject: FlutterProject.current(),
-      debuggingOptions: DebuggingOptions.enabled(BuildInfo.profile),
-      ipv6: true,
-      stayResident: true,
-      dartDefines: const <String>[],
-      urlTunneller: null,
-    ) as ResidentWebRunner;
-
-    expect(residentWebRunner.runtimeType.toString(), '_DwdsResidentWebRunner');
-  }, overrides: <Type, Generator>{
-    FeatureFlags: () => TestFeatureFlags(isWebIncrementalCompilerEnabled: true),
-  }));
-
-  test('Fails on compilation errors in hot restart', () => testbed.run(() async {
+  testUsingContext('Fails on compilation errors in hot restart', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: kAttachExpectations.toList());
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockWebFs.recompile()).thenAnswer((Invocation _) async {
-      return false;
+    when(mockWebDevFS.update(
+      mainUri: anyNamed('mainUri'),
+      target: anyNamed('target'),
+      bundle: anyNamed('bundle'),
+      firstBuildTime: anyNamed('firstBuildTime'),
+      bundleFirstUpload: anyNamed('bundleFirstUpload'),
+      generator: anyNamed('generator'),
+      fullRestart: anyNamed('fullRestart'),
+      dillOutputPath: anyNamed('dillOutputPath'),
+      projectRootPath: anyNamed('projectRootPath'),
+      pathToReload: anyNamed('pathToReload'),
+      invalidatedFiles: anyNamed('invalidatedFiles'),
+      packageConfig: anyNamed('packageConfig'),
+      trackWidgetCreation: anyNamed('trackWidgetCreation'),
+    )).thenAnswer((Invocation _) async {
+      return UpdateFSReport(success: false,  syncedBytes: 0)..invalidatedModules = <String>[];
     });
+
     final OperationResult result = await residentWebRunner.restart(fullRestart: true);
 
     expect(result.code, 1);
     expect(result.message, contains('Failed to recompile application.'));
-    verifyNever(Usage.instance.sendTiming('hot', 'web-restart', any));
-    verifyNever(Usage.instance.sendTiming('hot', 'web-refresh', any));
-    verifyNever(Usage.instance.sendTiming('hot', 'web-recompile', any));
+    verifyNever(globals.flutterUsage.sendTiming('hot', 'web-restart', any));
   }, overrides: <Type, Generator>{
     Usage: () => MockFlutterUsage(),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Fails on vmservice response error for hot restart', () => testbed.run(() async {
+  testUsingContext('Fails non-fatally on vmservice response error for hot restart', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'hotRestart',
+        jsonResponse: <String, Object>{
+          'type': 'Failed',
+        }
+      )
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockWebFs.recompile()).thenAnswer((Invocation _) async {
-      return true;
-    });
-    when(mockVmService.callServiceExtension('fullReload')).thenAnswer((Invocation _) async {
-      return Response.parse(<String, Object>{'type': 'Failed'});
-    });
-    final OperationResult result = await residentWebRunner.restart(fullRestart: true);
 
-    expect(result.code, 1);
-    expect(result.message, contains('Failed'));
-    verifyNever(Usage.instance.sendTiming('hot', 'web-restart', any));
-    verifyNever(Usage.instance.sendTiming('hot', 'web-refresh', any));
-    verify(Usage.instance.sendTiming('hot', 'web-recompile', any)).called(1);
+    final OperationResult result = await residentWebRunner.restart(fullRestart: false);
+
+    expect(result.code, 0);
   }, overrides: <Type, Generator>{
-    Usage: () => MockFlutterUsage(),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Fails on vmservice response error for hot reload', () => testbed.run(() async {
+  testUsingContext('Fails fatally on Vm Service error response', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'hotRestart',
+        // Failed response,
+        errorCode: RPCErrorCodes.kInternalError,
+      ),
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockWebFs.recompile()).thenAnswer((Invocation _) async {
-      return true;
-    });
-    when(mockVmService.callServiceExtension('hotRestart')).thenAnswer((Invocation _) async {
-      return Response.parse(<String, Object>{'type': 'Failed'});
-    });
     final OperationResult result = await residentWebRunner.restart(fullRestart: false);
 
     expect(result.code, 1);
-    expect(result.message, contains('Failed'));
-    verifyNever(Usage.instance.sendTiming('hot', 'web-restart', any));
-    verifyNever(Usage.instance.sendTiming('hot', 'web-refresh', any));
-    verify(Usage.instance.sendTiming('hot', 'web-recompile', any)).called(1);
+    expect(result.message,
+      contains(RPCErrorCodes.kInternalError.toString()));
   }, overrides: <Type, Generator>{
-    Usage: () => MockFlutterUsage(),
-  }));
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Fails on vmservice RpcError', () => testbed.run(() async {
-    _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    unawaited(residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ));
-    await connectionInfoCompleter.future;
-    when(mockWebFs.recompile()).thenAnswer((Invocation _) async {
-      return true;
-    });
-    when(mockVmService.callServiceExtension('hotRestart')).thenThrow(RPCError('', 2, '123'));
-    final OperationResult result = await residentWebRunner.restart(fullRestart: false);
-
-    expect(result.code, 1);
-    expect(result.message, contains('Page requires refresh'));
-  }));
-
-  test('printHelp without details has web warning', () => testbed.run(() async {
+  testUsingContext('printHelp without details has web warning', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     residentWebRunner.printHelp(details: false);
 
     expect(testLogger.statusText, contains('Warning'));
     expect(testLogger.statusText, contains('https://flutter.dev/web'));
     expect(testLogger.statusText, isNot(contains('https://flutter.dev/web.')));
-  }));
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugDumpApp', () => testbed.run(() async {
+  testUsingContext('debugDumpApp', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.debugDumpApp',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+      ),
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
@@ -653,10 +980,25 @@ void main() {
     await connectionInfoCompleter.future;
     await residentWebRunner.debugDumpApp();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.debugDumpApp')).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugDumpLayerTree', () => testbed.run(() async {
+  testUsingContext('debugDumpLayerTree', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.debugDumpLayerTree',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+      ),
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
@@ -665,10 +1007,25 @@ void main() {
     await connectionInfoCompleter.future;
     await residentWebRunner.debugDumpLayerTree();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.debugDumpLayerTree')).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugDumpRenderTree', () => testbed.run(() async {
+  testUsingContext('debugDumpRenderTree', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.debugDumpRenderTree',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+      ),
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
@@ -677,10 +1034,25 @@ void main() {
     await connectionInfoCompleter.future;
     await residentWebRunner.debugDumpRenderTree();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.debugDumpRenderTree')).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugDumpSemanticsTreeInTraversalOrder', () => testbed.run(() async {
+  testUsingContext('debugDumpSemanticsTreeInTraversalOrder', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.debugDumpSemanticsTreeInTraversalOrder',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+      ),
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
@@ -689,116 +1061,341 @@ void main() {
     await connectionInfoCompleter.future;
     await residentWebRunner.debugDumpSemanticsTreeInTraversalOrder();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.debugDumpSemanticsTreeInTraversalOrder')).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugDumpSemanticsTreeInInverseHitTestOrder', () => testbed.run(() async {
+  testUsingContext('debugDumpSemanticsTreeInInverseHitTestOrder', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.debugDumpSemanticsTreeInInverseHitTestOrder',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+      ),
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
+
     await connectionInfoCompleter.future;
     await residentWebRunner.debugDumpSemanticsTreeInInverseHitTestOrder();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.debugDumpSemanticsTreeInInverseHitTestOrder')).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugToggleDebugPaintSizeEnabled', () => testbed.run(() async {
+  testUsingContext('debugToggleDebugPaintSizeEnabled', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.debugPaint',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'false'
+        },
+      ),
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.debugPaint',
+        args: <String, Object>{
+          'isolateId': null,
+          'enabled': 'true',
+        },
+        jsonResponse: <String, Object>{
+          'value': 'true'
+        },
+      )
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockVmService.callServiceExtension('ext.flutter.debugPaint'))
-      .thenAnswer((Invocation _) async {
-        return Response.parse(<String, Object>{'enabled': false});
-    });
+
     await residentWebRunner.debugToggleDebugPaintSizeEnabled();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.debugPaint',
-        args: <String, Object>{'enabled': true})).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-
-  test('debugTogglePerformanceOverlayOverride', () => testbed.run(() async {
+  testUsingContext('debugTogglePerformanceOverlayOverride', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.showPerformanceOverlay',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'false'
+        },
+      ),
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.showPerformanceOverlay',
+        args: <String, Object>{
+          'isolateId': null,
+          'enabled': 'true',
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'true'
+        },
+      )
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockVmService.callServiceExtension('ext.flutter.showPerformanceOverlay'))
-      .thenAnswer((Invocation _) async {
-        return Response.parse(<String, Object>{'enabled': false});
-    });
 
     await residentWebRunner.debugTogglePerformanceOverlayOverride();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.showPerformanceOverlay',
-        args: <String, Object>{'enabled': true})).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugToggleWidgetInspector', () => testbed.run(() async {
+  testUsingContext('debugToggleInvertOversizedImagesOverride', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.invertOversizedImages',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'false'
+        },
+      ),
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.invertOversizedImages',
+        args: <String, Object>{
+          'isolateId': null,
+          'enabled': 'true',
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'true'
+        },
+      )
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockVmService.callServiceExtension('ext.flutter.debugToggleWidgetInspector'))
-      .thenAnswer((Invocation _) async {
-        return Response.parse(<String, Object>{'enabled': false});
-    });
+
+    await residentWebRunner.debugToggleInvertOversizedImages();
+
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+
+  testUsingContext('debugToggleWidgetInspector', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.inspector.show',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'false'
+        },
+      ),
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.inspector.show',
+        args: <String, Object>{
+          'isolateId': null,
+          'enabled': 'true',
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'true'
+        },
+      )
+    ]);
+    _setupMocks();
+    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
+    unawaited(residentWebRunner.run(
+      connectionInfoCompleter: connectionInfoCompleter,
+    ));
+    await connectionInfoCompleter.future;
 
     await residentWebRunner.debugToggleWidgetInspector();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.debugToggleWidgetInspector',
-        args: <String, Object>{'enabled': true})).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugToggleProfileWidgetBuilds', () => testbed.run(() async {
+  testUsingContext('debugToggleProfileWidgetBuilds', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.profileWidgetBuilds',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'false'
+        },
+      ),
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.profileWidgetBuilds',
+        args: <String, Object>{
+          'isolateId': null,
+          'enabled': 'true',
+        },
+        jsonResponse: <String, Object>{
+          'enabled': 'true'
+        },
+      )
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockVmService.callServiceExtension('ext.flutter.profileWidgetBuilds'))
-      .thenAnswer((Invocation _) async {
-        return Response.parse(<String, Object>{'enabled': false});
-    });
 
     await residentWebRunner.debugToggleProfileWidgetBuilds();
 
-    verify(mockVmService.callServiceExtension('ext.flutter.profileWidgetBuilds',
-        args: <String, Object>{'enabled': true})).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('debugTogglePlatform', () => testbed.run(() async {
+  testUsingContext('debugTogglePlatform', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.platformOverride',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+        jsonResponse: <String, Object>{
+          'value': 'iOS'
+        },
+      ),
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.platformOverride',
+        args: <String, Object>{
+          'isolateId': null,
+          'value': 'fuchsia',
+        },
+        jsonResponse: <String, Object>{
+          'value': 'fuchsia'
+        },
+      ),
+    ]);
     _setupMocks();
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
-    when(mockVmService.callServiceExtension('ext.flutter.platformOverride'))
-      .thenAnswer((Invocation _) async {
-        return Response.parse(<String, Object>{'value': 'iOS'});
-    });
 
     await residentWebRunner.debugTogglePlatform();
 
-    expect(testLogger.statusText, contains('Switched operating system to fuchsia'));
-    verify(mockVmService.callServiceExtension('ext.flutter.platformOverride',
-        args: <String, Object>{'value': 'fuchsia'})).called(1);
-  }));
+    expect(testLogger.statusText,
+      contains('Switched operating system to fuchsia'));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('cleanup of resources is safe to call multiple times', () => testbed.run(() async {
+  testUsingContext('debugToggleBrightness', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.brightnessOverride',
+        args: <String, Object>{
+          'isolateId': null,
+        },
+        jsonResponse: <String, Object>{
+          'value': 'Brightness.light'
+        },
+      ),
+      const FakeVmServiceRequest(
+        method: 'ext.flutter.brightnessOverride',
+        args: <String, Object>{
+          'isolateId': null,
+          'value': 'Brightness.dark',
+        },
+        jsonResponse: <String, Object>{
+          'value': 'Brightness.dark'
+        },
+      ),
+    ]);
+    _setupMocks();
+    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
+    unawaited(residentWebRunner.run(
+      connectionInfoCompleter: connectionInfoCompleter,
+    ));
+    await connectionInfoCompleter.future;
+
+    await residentWebRunner.debugToggleBrightness();
+
+    expect(testLogger.statusText,
+      contains('Changed brightness to Brightness.dark.'));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
+
+  testUsingContext('cleanup of resources is safe to call multiple times', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+    ]);
     _setupMocks();
     bool debugClosed = false;
-    when(mockChromeDevice.stopApp(any)).thenAnswer((Invocation invocation) async {
+    when(mockDevice.stopApp(any, userIdentifier: anyNamed('userIdentifier'))).thenAnswer((Invocation invocation) async {
       if (debugClosed) {
         throw StateError('debug connection closed twice');
       }
@@ -815,9 +1412,19 @@ void main() {
     await residentWebRunner.exit();
 
     verifyNever(mockDebugConnection.close());
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('cleans up Chrome if tab is closed', () => testbed.run(() async {
+  testUsingContext('cleans up Chrome if tab is closed', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+    ]);
     _setupMocks();
     final Completer<void> onDone = Completer<void>();
     when(mockDebugConnection.onDone).thenAnswer((Invocation invocation) {
@@ -831,24 +1438,76 @@ void main() {
     onDone.complete();
 
     await result;
-    verify(mockWebFs.stop()).called(1);
-  }));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Prints target and device name on run', () => testbed.run(() async {
+  testUsingContext('Prints target and device name on run', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachExpectations,
+    ]);
     _setupMocks();
-    when(mockChromeDevice.name).thenReturn('Chromez');
+    when(mockDevice.name).thenReturn('Chromez');
     final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
     unawaited(residentWebRunner.run(
       connectionInfoCompleter: connectionInfoCompleter,
     ));
     await connectionInfoCompleter.future;
 
-    expect(testLogger.statusText, contains('Launching ${globals.fs.path.join('lib', 'main.dart')} on Chromez in debug mode'));
-  }));
+    expect(testLogger.statusText, contains(
+      'Launching ${fileSystem.path.join('lib', 'main.dart')} on '
+      'Chromez in debug mode',
+    ));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Sends launched app.webLaunchUrl event for Chrome device', () => testbed.run(() async {
+  testUsingContext('Sends launched app.webLaunchUrl event for Chrome device', () async {
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[
+      ...kAttachLogExpectations,
+      ...kAttachIsolateExpectations,
+    ]);
     _setupMocks();
-    when(mockFlutterDevice.device).thenReturn(ChromeDevice());
+    final ChromiumLauncher chromiumLauncher = MockChromeLauncher();
+    when(chromiumLauncher.launch(any, cacheDir: anyNamed('cacheDir')))
+      .thenAnswer((Invocation invocation) async {
+        return mockChrome;
+      });
+    when(chromiumLauncher.connectedInstance).thenAnswer((Invocation invocation) async {
+      return mockChrome;
+    });
+    when(mockFlutterDevice.device).thenReturn(GoogleChromeDevice(
+      fileSystem: fileSystem,
+      chromiumLauncher: chromiumLauncher,
+      logger: globals.logger,
+      platform: FakePlatform(operatingSystem: 'linux'),
+      processManager: FakeProcessManager.any(),
+    ));
+    when(chromiumLauncher.canFindExecutable()).thenReturn(true);
+    when(mockWebDevFS.create()).thenAnswer((Invocation invocation) async {
+      return Uri.parse('http://localhost:8765/app/');
+    });
+    final MockChrome chrome = MockChrome();
+    final MockChromeConnection mockChromeConnection = MockChromeConnection();
+    final MockChromeTab mockChromeTab = MockChromeTab();
+    final MockWipConnection mockWipConnection = MockWipConnection();
+    when(mockChromeConnection.getTab(any)).thenAnswer((Invocation invocation) async {
+      return mockChromeTab;
+    });
+    when(mockChromeTab.connect()).thenAnswer((Invocation invocation) async {
+      return mockWipConnection;
+    });
+    when(chrome.chromeConnection).thenReturn(mockChromeConnection);
+    chromiumLauncher.testLaunchChromium(chrome);
 
     final DelegateLogger delegateLogger = globals.logger as DelegateLogger;
     final MockStatus mockStatus = MockStatus();
@@ -859,7 +1518,6 @@ void main() {
       debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
       ipv6: true,
       stayResident: true,
-      dartDefines: const <String>[],
       urlTunneller: null,
     ) as ResidentWebRunner;
 
@@ -870,21 +1528,33 @@ void main() {
     await connectionInfoCompleter.future;
 
     // Ensure we got the URL and that it was already launched.
-    verify(globals.logger.sendEvent(
-      'app.webLaunchUrl',
-      argThat(allOf(
-        containsPair('url', 'http://localhost:8765/app/'),
-        containsPair('launched', true),
-      ))
-    ));
+    expect((delegateLogger.delegate as BufferLogger).eventText,
+      contains(json.encode(<String, Object>{
+        'name': 'app.webLaunchUrl',
+        'args': <String, Object>{
+          'url': 'http://localhost:8765/app/',
+          'launched': true,
+        },
+      },
+    )));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
   }, overrides: <Type, Generator>{
-    Logger: () => DelegateLogger(MockLogger()),
-    ChromeLauncher: () => MockChromeLauncher(),
-  }));
+    Logger: () => DelegateLogger(BufferLogger.test()),
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Sends unlaunched app.webLaunchUrl event for Web Server device', () => testbed.run(() async {
+  testUsingContext('Sends unlaunched app.webLaunchUrl event for Web Server device', () async {
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     _setupMocks();
-    when(mockFlutterDevice.device).thenReturn(WebServerDevice());
+    when(mockFlutterDevice.device).thenReturn(WebServerDevice(
+      logger: globals.logger,
+    ));
+    when(mockWebDevFS.create()).thenAnswer((Invocation invocation) async {
+      return Uri.parse('http://localhost:8765/app/');
+    });
 
     final DelegateLogger delegateLogger = globals.logger as DelegateLogger;
     final MockStatus mockStatus = MockStatus();
@@ -895,7 +1565,6 @@ void main() {
       debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
       ipv6: true,
       stayResident: true,
-      dartDefines: const <String>[],
       urlTunneller: null,
     ) as ResidentWebRunner;
 
@@ -906,191 +1575,103 @@ void main() {
     await connectionInfoCompleter.future;
 
     // Ensure we got the URL and that it was not already launched.
-    verify(globals.logger.sendEvent(
-      'app.webLaunchUrl',
-      argThat(allOf(
-        containsPair('url', 'http://localhost:8765/app/'),
-        containsPair('launched', false),
-      ))
-    ));
+    expect((delegateLogger.delegate as BufferLogger).eventText,
+      contains(json.encode(<String, Object>{
+        'name': 'app.webLaunchUrl',
+        'args': <String, Object>{
+          'url': 'http://localhost:8765/app/',
+          'launched': false,
+        },
+      },
+    )));
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
   }, overrides: <Type, Generator>{
-    Logger: () => DelegateLogger(MockLogger())
-  }));
+    Logger: () => DelegateLogger(BufferLogger.test()),
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Successfully turns WebSocketException into ToolExit', () => testbed.run(() async {
+  testUsingContext('Successfully turns WebSocketException into ToolExit', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw const WebSocketException();
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
 
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsToolExit());
+    when(mockWebDevFS.connect(any))
+      .thenThrow(const WebSocketException());
 
-    unhandledErrorCompleter.complete();
-    await expectation;
-  }));
+    await expectLater(residentWebRunner.run, throwsToolExit());
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Successfully turns AppConnectionException into ToolExit', () => testbed.run(() async {
+  testUsingContext('Successfully turns AppConnectionException into ToolExit', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw AppConnectionException('Could not connect to application with appInstanceId: c0ae0750-ee91-11e9-cea6-35d95a968356');
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
 
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsToolExit());
+    when(mockWebDevFS.connect(any))
+      .thenThrow(AppConnectionException(''));
 
-    unhandledErrorCompleter.complete();
-    await expectation;
-  }));
+    await expectLater(residentWebRunner.run, throwsToolExit());
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Successfully turns ChromeDebugError into ToolExit', () => testbed.run(() async {
-     _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw ChromeDebugException(<String, dynamic>{});
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
-
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsToolExit());
-
-    unhandledErrorCompleter.complete();
-    await expectation;
-  }));
-
-  test('Successfully turns OptionsSkew error into ToolExit', () => testbed.run(() async {
+  testUsingContext('Successfully turns ChromeDebugError into ToolExit', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw OptionsSkew();
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
 
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsToolExit());
+    when(mockWebDevFS.connect(any))
+      .thenThrow(ChromeDebugException(<String, dynamic>{}));
 
-    unhandledErrorCompleter.complete();
-    await expectation;
-  }));
+    await expectLater(residentWebRunner.run, throwsToolExit());
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-  test('Successfully turns VersionSkew error into ToolExit', () => testbed.run(() async {
+  testUsingContext('Rethrows unknown Exception type from dwds', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw VersionSkew();
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
+    when(mockWebDevFS.connect(any)).thenThrow(Exception());
 
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsToolExit());
+    await expectLater(residentWebRunner.run, throwsException);
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
+  }, overrides: <Type, Generator>{
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 
-    unhandledErrorCompleter.complete();
-    await expectation;
-  }));
-
-  test('Successfully turns failed startup StateError error into ToolExit', () => testbed.run(() async {
-    _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw StateError('Unable to start build daemon');
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
-
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsToolExit());
-
-    unhandledErrorCompleter.complete();
-    await expectation;
-  }));
-
-
-  test('Rethrows Exception type', () => testbed.run(() async {
-    _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw Exception('Something went wrong');
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
-
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsException);
-
-    unhandledErrorCompleter.complete();
-    await expectation;
-  }));
-
-  test('Successfully turns MissingPortFile error into ToolExit', () => testbed.run(() async {
-    _setupMocks();
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw MissingPortFile();
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
-
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsToolExit());
-
-    unhandledErrorCompleter.complete();
-    await expectation;
-  }));
-
-  test('Rethrows unknown exception type from web tooling', () => testbed.run(() async {
+  testUsingContext('Rethrows unknown Error type from dwds tooling', () async {
+    final ResidentRunner residentWebRunner = setUpResidentRunner(mockFlutterDevice);
+    fakeVmServiceHost = FakeVmServiceHost(requests: <VmServiceExpectation>[]);
     _setupMocks();
     final DelegateLogger delegateLogger = globals.logger as DelegateLogger;
     final MockStatus mockStatus = MockStatus();
     delegateLogger.status = mockStatus;
-    final Completer<DebugConnectionInfo> connectionInfoCompleter = Completer<DebugConnectionInfo>();
-    final Completer<void> unhandledErrorCompleter = Completer<void>();
-    when(mockWebFs.connect(any)).thenAnswer((Invocation _) async {
-      unawaited(unhandledErrorCompleter.future.then((void value) {
-        throw StateError('Something went wrong');
-      }));
-      return ConnectionResult(mockAppConnection, mockDebugConnection);
-    });
 
-    final Future<void> expectation = expectLater(() => residentWebRunner.run(
-      connectionInfoCompleter: connectionInfoCompleter,
-    ), throwsStateError);
+    when(mockWebDevFS.connect(any)).thenThrow(StateError(''));
 
-    unhandledErrorCompleter.complete();
-    await expectation;
-    verify(mockStatus.stop()).called(2);
+    await expectLater(residentWebRunner.run, throwsStateError);
+    verify(mockStatus.stop()).called(1);
+    expect(fakeVmServiceHost.hasRemainingExpectations, false);
   }, overrides: <Type, Generator>{
     Logger: () => DelegateLogger(BufferLogger(
       terminal: AnsiTerminal(
@@ -1098,26 +1679,40 @@ void main() {
         platform: const LocalPlatform(),
       ),
       outputPreferences: OutputPreferences.test(),
-    ))
-  }));
+    )),
+    FileSystem: () => fileSystem,
+    ProcessManager: () => processManager,
+    Pub: () => MockPub(),
+    Platform: () => FakePlatform(operatingSystem: 'linux', environment: <String, String>{}),
+  });
 }
 
-class MockChromeLauncher extends Mock implements ChromeLauncher {}
+ResidentRunner setUpResidentRunner(FlutterDevice flutterDevice) {
+  return DwdsWebRunnerFactory().createWebRunner(
+    flutterDevice,
+    flutterProject: FlutterProject.current(),
+    debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+    ipv6: true,
+    stayResident: true,
+    urlTunneller: null,
+  ) as ResidentWebRunner;
+}
+
+class MockChromeLauncher extends Mock implements ChromiumLauncher {}
 class MockFlutterUsage extends Mock implements Usage {}
-class MockChromeDevice extends Mock implements ChromeDevice {}
-class MockBuildDaemonCreator extends Mock implements BuildDaemonCreator {}
-class MockFlutterWebFs extends Mock implements WebFs {}
+class MockChromeDevice extends Mock implements ChromiumDevice {}
 class MockDebugConnection extends Mock implements DebugConnection {}
 class MockAppConnection extends Mock implements AppConnection {}
 class MockVmService extends Mock implements VmService {}
 class MockStatus extends Mock implements Status {}
 class MockFlutterDevice extends Mock implements FlutterDevice {}
-class MockWebDevFS extends Mock implements DevFS {}
+class MockWebDevFS extends Mock implements WebDevFS {}
 class MockResidentCompiler extends Mock implements ResidentCompiler {}
-class MockChrome extends Mock implements Chrome {}
+class MockChrome extends Mock implements Chromium {}
 class MockChromeConnection extends Mock implements ChromeConnection {}
 class MockChromeTab extends Mock implements ChromeTab {}
 class MockWipConnection extends Mock implements WipConnection {}
 class MockWipDebugger extends Mock implements WipDebugger {}
-class MockLogger extends Mock implements Logger {}
 class MockWebServerDevice extends Mock implements WebServerDevice {}
+class MockDevice extends Mock implements Device {}
+class MockPub extends Mock implements Pub {}

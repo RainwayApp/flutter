@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +56,33 @@ void main() {
     });
 
     group('in vertical mode', () {
+      testWidgets('reorder is not triggered when children length is less or equals to 1', (WidgetTester tester) async {
+        bool onReorderWasCalled = false;
+        final List<String> currentListItems = listItems.take(1).toList();
+        final ReorderableListView reorderableListView = ReorderableListView(
+          header: const Text('Header'),
+          children: currentListItems.map<Widget>(listItemToWidget).toList(),
+          scrollDirection: Axis.vertical,
+          onReorder: (_, __) => onReorderWasCalled = true,
+        );
+        final List<String> currentOriginalListItems = originalListItems.take(1).toList();
+        await tester.pumpWidget(MaterialApp(
+          home: SizedBox(
+            height: itemHeight * 10,
+            child: reorderableListView,
+          ),
+        ));
+        expect(currentListItems, orderedEquals(currentOriginalListItems));
+        final TestGesture drag = await tester.startGesture(tester.getCenter(find.text('Item 1')));
+        await tester.pump(kLongPressTimeout + kPressTimeout);
+        expect(currentListItems, orderedEquals(currentOriginalListItems));
+        await drag.moveTo(tester.getBottomLeft(find.text('Item 1')) * 2);
+        expect(currentListItems, orderedEquals(currentOriginalListItems));
+        await drag.up();
+        expect(onReorderWasCalled, false);
+        expect(currentListItems, orderedEquals(<String>['Item 1']));
+      });
+
       testWidgets('reorders its contents only when a drag finishes', (WidgetTester tester) async {
         await tester.pumpWidget(build());
         expect(listItems, orderedEquals(originalListItems));
@@ -261,6 +290,65 @@ void main() {
           find.byType(SingleChildScrollView),
         );
         expect(scrollView.controller, primary2);
+      });
+
+      testWidgets('Test custom ScrollController behavior when set', (WidgetTester tester) async {
+        const Key firstBox = Key('C');
+        const Key secondBox = Key('B');
+        const Key thirdBox = Key('A');
+        final ScrollController customController = ScrollController();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 200,
+                child: ReorderableListView(
+                  scrollController: customController,
+                  onReorder: (int oldIndex, int newIndex) { },
+                  children: const <Widget>[
+                    SizedBox(width: 100.0, height: 100.0, child: Text('C'), key: firstBox),
+                    SizedBox(width: 100.0, height: 100.0, child: Text('B'), key: secondBox),
+                    SizedBox(width: 100.0, height: 100.0, child: Text('A'), key: thirdBox),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // Check initial scroll offset of first list item relative to
+        // the offset of the list view.
+        customController.animateTo(
+          40.0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.linear
+        );
+        await tester.pumpAndSettle();
+        Offset listViewTopLeft = tester.getTopLeft(
+          find.byType(ReorderableListView),
+        );
+        Offset firstBoxTopLeft = tester.getTopLeft(
+          find.byKey(firstBox)
+        );
+        expect(firstBoxTopLeft.dy, listViewTopLeft.dy - 40.0);
+
+        // Drag the UI to see if the scroll controller updates accordingly
+        await tester.drag(
+          find.text('B'),
+          const Offset(0.0, -100.0),
+        );
+        listViewTopLeft = tester.getTopLeft(
+          find.byType(ReorderableListView),
+        );
+        firstBoxTopLeft = tester.getTopLeft(
+          find.byKey(firstBox),
+        );
+        // Initial scroll controller offset: 40.0
+        // Drag UI by 100.0 upwards vertically
+        // First 20.0 px always ignored, so scroll offset is only
+        // shifted by 80.0.
+        // Final offset: 40.0 + 80.0 = 120.0
+        expect(customController.offset, 120.0);
       });
 
       testWidgets('Still builds when no PrimaryScrollController is available', (WidgetTester tester) async {
@@ -486,6 +574,33 @@ void main() {
     });
 
     group('in horizontal mode', () {
+      testWidgets('reorder is not triggered when children length is less or equals to 1', (WidgetTester tester) async {
+        bool onReorderWasCalled = false;
+        final List<String> currentListItems = listItems.take(1).toList();
+        final ReorderableListView reorderableListView = ReorderableListView(
+          header: const Text('Header'),
+          children: currentListItems.map<Widget>(listItemToWidget).toList(),
+          scrollDirection: Axis.horizontal,
+          onReorder: (_, __) => onReorderWasCalled = true,
+        );
+        final List<String> currentOriginalListItems = originalListItems.take(1).toList();
+        await tester.pumpWidget(MaterialApp(
+          home: SizedBox(
+            height: itemHeight * 10,
+            child: reorderableListView,
+          ),
+        ));
+        expect(currentListItems, orderedEquals(currentOriginalListItems));
+        final TestGesture drag = await tester.startGesture(tester.getCenter(find.text('Item 1')));
+        await tester.pump(kLongPressTimeout + kPressTimeout);
+        expect(currentListItems, orderedEquals(currentOriginalListItems));
+        await drag.moveTo(tester.getBottomLeft(find.text('Item 1')) * 2);
+        expect(currentListItems, orderedEquals(currentOriginalListItems));
+        await drag.up();
+        expect(onReorderWasCalled, false);
+        expect(currentListItems, orderedEquals(<String>['Item 1']));
+      });
+
       testWidgets('allows reordering from the very top to the very bottom', (WidgetTester tester) async {
         await tester.pumpWidget(build(scrollDirection: Axis.horizontal));
         expect(listItems, orderedEquals(originalListItems));

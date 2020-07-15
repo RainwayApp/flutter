@@ -5,19 +5,19 @@
 import 'dart:async';
 
 import 'package:async/async.dart';
-import '../base/context.dart';
 import '../base/io.dart';
 import '../convert.dart';
 
 /// Default factory that creates a real Android console connection.
-final AndroidConsoleSocketFactory _kAndroidConsoleSocketFactory = (String host, int port) => Socket.connect( host,  port);
+///
+/// The default implementation will create real connections to a device.
+/// Override this in tests with an implementation that returns mock responses.
+Future<Socket> kAndroidConsoleSocketFactory(String host, int port) => Socket.connect(host, port);
 
 /// Currently active implementation of the AndroidConsoleFactory.
 ///
 /// The default implementation will create real connections to a device.
 /// Override this in tests with an implementation that returns mock responses.
-AndroidConsoleSocketFactory get androidConsoleSocketFactory => context.get<AndroidConsoleSocketFactory>() ?? _kAndroidConsoleSocketFactory;
-
 typedef AndroidConsoleSocketFactory = Future<Socket> Function(String host, int port);
 
 /// Creates a console connection to an Android emulator that can be used to run
@@ -42,21 +42,29 @@ class AndroidConsole {
   }
 
   Future<String> getAvdName() async {
+    if (_queue == null) {
+      return null;
+    }
     _write('avd name\n');
     return _readResponse();
   }
 
   void destroy() {
-    if (_socket != null) {
-      _socket.destroy();
-      _socket = null;
-      _queue = null;
-    }
+    _socket?.destroy();
+    _socket = null;
+    _queue = null;
   }
 
   Future<String> _readResponse() async {
+    if (_queue == null) {
+      return null;
+    }
     final StringBuffer output = StringBuffer();
     while (true) {
+      if (!await _queue.hasNext) {
+        destroy();
+        return null;
+      }
       final String text = await _queue.next;
       final String trimmedText = text.trim();
       if (trimmedText == 'OK') {
@@ -72,6 +80,6 @@ class AndroidConsole {
   }
 
   void _write(String text) {
-    _socket.add(ascii.encode(text));
+    _socket?.add(ascii.encode(text));
   }
 }

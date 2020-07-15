@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 import '../flutter_test_alternative.dart';
 
@@ -14,7 +16,7 @@ void main() {
     });
     expect(log[0], contains('Example label'));
     expect(log[1], contains('debugPrintStack'));
-  }, skip: isBrowser);
+  });
 
   test('debugPrintStack', () {
     final List<String> log = captureOutput(() {
@@ -39,7 +41,7 @@ void main() {
 
     expect(joined, contains('captureOutput'));
     expect(joined, contains('\nExample information\n'));
-  }, skip: isBrowser);
+  });
 
   test('FlutterErrorDetails.toString', () {
     expect(
@@ -355,7 +357,8 @@ void main() {
 
   test('Identifies user fault', () {
     // User fault because they called `new Text(null)` from their own code.
-    final StackTrace stack = StackTrace.fromString('''#0      _AssertionError._doThrowNew (dart:core-patch/errors_patch.dart:42:39)
+    final StackTrace stack = StackTrace.fromString('''
+#0      _AssertionError._doThrowNew (dart:core-patch/errors_patch.dart:42:39)
 #1      _AssertionError._throwNew (dart:core-patch/errors_patch.dart:38:5)
 #2      new Text (package:flutter/src/widgets/text.dart:287:10)
 #3      _MyHomePageState.build (package:hello_flutter/main.dart:72:16)
@@ -379,7 +382,7 @@ void main() {
 
     expect(builder.properties.length, 4);
     expect(builder.properties[0].toString(), 'The following assertion was thrown:');
-    expect(builder.properties[1].toString(), 'Assertion failed');
+    expect(builder.properties[1].toString(), contains('Assertion failed'));
     expect(builder.properties[2] is ErrorSpacer, true);
     final DiagnosticsStackTrace trace = builder.properties[3] as DiagnosticsStackTrace;
     expect(trace, isNotNull);
@@ -389,7 +392,8 @@ void main() {
   test('Identifies our fault', () {
     // Our fault because we should either have an assertion in `text_helper.dart`
     // or we should make sure not to pass bad values into new Text.
-    final StackTrace stack = StackTrace.fromString('''#0      _AssertionError._doThrowNew (dart:core-patch/errors_patch.dart:42:39)
+    final StackTrace stack = StackTrace.fromString('''
+#0      _AssertionError._doThrowNew (dart:core-patch/errors_patch.dart:42:39)
 #1      _AssertionError._throwNew (dart:core-patch/errors_patch.dart:38:5)
 #2      new Text (package:flutter/src/widgets/text.dart:287:10)
 #3      new SomeWidgetUsingText (package:flutter/src/widgets/text_helper.dart:287:10)
@@ -413,7 +417,7 @@ void main() {
     details.debugFillProperties(builder);
     expect(builder.properties.length, 6);
     expect(builder.properties[0].toString(), 'The following assertion was thrown:');
-    expect(builder.properties[1].toString(), 'Assertion failed');
+    expect(builder.properties[1].toString(), contains('Assertion failed'));
     expect(builder.properties[2] is ErrorSpacer, true);
     expect(
       builder.properties[3].toString(),
@@ -427,5 +431,25 @@ void main() {
     final DiagnosticsStackTrace trace = builder.properties[5] as DiagnosticsStackTrace;
     expect(trace, isNotNull);
     expect(trace.value, stack);
+  });
+
+  test('RepetitiveStackFrameFilter does not go out of range', () {
+    const RepetitiveStackFrameFilter filter = RepetitiveStackFrameFilter(
+      frames: <PartialStackFrame>[
+        PartialStackFrame(className: 'TestClass', method: 'test1', package: 'package:test/blah.dart'),
+        PartialStackFrame(className: 'TestClass', method: 'test2', package: 'package:test/blah.dart'),
+        PartialStackFrame(className: 'TestClass', method: 'test3', package: 'package:test/blah.dart'),
+      ],
+      replacement: 'test',
+    );
+    final List<String> reasons = List<String>(2);
+    filter.filter(
+      const <StackFrame>[
+        StackFrame(className: 'TestClass', method: 'test1', packageScheme: 'package', package: 'test', packagePath: 'blah.dart', line: 1, column: 1, number: 0, source: ''),
+        StackFrame(className: 'TestClass', method: 'test2', packageScheme: 'package', package: 'test', packagePath: 'blah.dart', line: 1, column: 1, number: 0, source: ''),
+      ],
+      reasons,
+    );
+    expect(reasons, List<String>(2));
   });
 }

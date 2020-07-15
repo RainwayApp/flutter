@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 
@@ -408,7 +410,7 @@ void main() {
     expect(inheritedValue, equals(3));
   });
 
-  testWidgets('Inherited widget doesn\'t notify descendants when descendant did not previously fail to find a match and had no dependencies', (WidgetTester tester) async {
+  testWidgets("Inherited widget doesn't notify descendants when descendant did not previously fail to find a match and had no dependencies", (WidgetTester tester) async {
     int buildCount = 0;
 
     final Widget inner = Container(

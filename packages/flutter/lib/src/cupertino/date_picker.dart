@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/scheduler.dart';
@@ -36,7 +38,7 @@ const double _kTimerPickerHalfColumnPadding = 2;
 const double _kTimerPickerLabelPadSize = 4.5;
 const double _kTimerPickerLabelFontSize = 17.0;
 
-// The width of each colmn of the countdown time picker.
+// The width of each column of the countdown time picker.
 const double _kTimerPickerColumnIntrinsicWidth = 106;
 // Unfortunately turning on magnification for the timer picker messes up the label
 // alignment. So we'll have to hard code the font size and turn magnification off
@@ -180,8 +182,8 @@ enum _PickerColumnType {
 ///
 /// Example of the picker in date mode:
 ///
-///  * US-English: ` July | 13 | 2012 `
-///  * Vietnamese: ` 13 | Tháng 7 | 2012 `
+///  * US-English: `| July | 13 | 2012 |`
+///  * Vietnamese: `| 13 | Tháng 7 | 2012 |`
 ///
 /// Can be used with [showCupertinoModalPopup] to display the picker modally at
 /// the bottom of the screen.
@@ -202,22 +204,26 @@ class CupertinoDatePicker extends StatefulWidget {
   ///
   /// [onDateTimeChanged] is the callback called when the selected date or time
   /// changes and must not be null. When in [CupertinoDatePickerMode.time] mode,
-  /// the year, month and day will be the same as [initialDateTime].
+  /// the year, month and day will be the same as [initialDateTime]. When in
+  /// [CupertinoDatePickerMode.date] mode, this callback will always report the
+  /// start time of the currently selected day.
   ///
   /// [initialDateTime] is the initial date time of the picker. Defaults to the
   /// present date and time and must not be null. The present must conform to
   /// the intervals set in [minimumDate], [maximumDate], [minimumYear], and
   /// [maximumYear].
   ///
-  /// [minimumDate] is the minimum [DateTime] that the picker can be scrolled to.
-  /// Null if there's no limit. In [CupertinoDatePickerMode.time] mode, if the
-  /// date part of [initialDateTime] is after that of the [minimumDate], [minimumDate]
-  /// has no effect.
+  /// [minimumDate] is the minimum selectable [DateTime] of the picker. When set
+  /// to null, the picker does not limit the minimum [DateTime] the user can pick.
+  /// In [CupertinoDatePickerMode.time] mode, [minimumDate] should typically be
+  /// on the same date as [initialDateTime], as the picker will not limit the
+  /// minimum time the user can pick if it's set to a date earlier than that.
   ///
-  /// [maximumDate] is the maximum [DateTime] that the picker can be scrolled to.
-  /// Null if there's no limit. In [CupertinoDatePickerMode.time] mode, if the
-  /// date part of [initialDateTime] is before that of the [maximumDate], [maximumDate]
-  /// has no effect.
+  /// [maximumDate] is the maximum selectable [DateTime] of the picker. When set
+  /// to null, the picker does not limit the maximum [DateTime] the user can pick.
+  /// In [CupertinoDatePickerMode.time] mode, [maximumDate] should typically be
+  /// on the same date as [initialDateTime], as the picker will not limit the
+  /// maximum time the user can pick if it's set to a date later than that.
   ///
   /// [minimumYear] is the minimum year that the picker can be scrolled to in
   /// [CupertinoDatePickerMode.date] mode. Defaults to 1 and must not be null.
@@ -261,7 +267,7 @@ class CupertinoDatePicker extends StatefulWidget {
     );
     assert(
       mode != CupertinoDatePickerMode.date || (minimumYear >= 1 && this.initialDateTime.year >= minimumYear),
-      'initial year is not greater than minimum year, or mininum year is not positive',
+      'initial year is not greater than minimum year, or minimum year is not positive',
     );
     assert(
       mode != CupertinoDatePickerMode.date || maximumYear == null || this.initialDateTime.year <= maximumYear,
@@ -269,11 +275,11 @@ class CupertinoDatePicker extends StatefulWidget {
     );
     assert(
       mode != CupertinoDatePickerMode.date || minimumDate == null || !minimumDate.isAfter(this.initialDateTime),
-      'initial date ${this.initialDateTime} is not greater than or euqal to minimumDate $minimumDate',
+      'initial date ${this.initialDateTime} is not greater than or equal to minimumDate $minimumDate',
     );
     assert(
       mode != CupertinoDatePickerMode.date || maximumDate == null || !maximumDate.isBefore(this.initialDateTime),
-      'initial date ${this.initialDateTime} is not less than or euqal to maximumDate $maximumDate',
+      'initial date ${this.initialDateTime} is not less than or equal to maximumDate $maximumDate',
     );
     assert(
       this.initialDateTime.minute % minuteInterval == 0,
@@ -294,12 +300,34 @@ class CupertinoDatePicker extends StatefulWidget {
   /// selected date time.
   final DateTime initialDateTime;
 
-  /// Minimum date that the picker can be scrolled to in [CupertinoDatePickerMode.date]
-  /// and [CupertinoDatePickerMode.dateAndTime] mode. Null if there's no limit.
+  /// The minimum selectable date that the picker can settle on.
+  ///
+  /// When non-null, the user can still scroll the picker to [DateTime]s earlier
+  /// than [minimumDate], but the [onDateChangeCallback] will not be called on
+  /// these [DateTime]s. Once let go, the picker will scroll back to [minimumDate].
+  ///
+  /// In [CupertinoDatePickerMode.time] mode, a time becomes unselectable if the
+  /// [DateTime] produced by combining that particular time and the date part of
+  /// [initialDateTime] is earlier than [minimumDate]. So typically [minimumDate]
+  /// needs to be set to a [DateTime] that is on the same date as [initialDateTime].
+  ///
+  /// Defaults to null. When set to null, the picker does not impose a limit on
+  /// the earliest [DateTime] the user can select.
   final DateTime minimumDate;
 
-  /// Maximum date that the picker can be scrolled to in [CupertinoDatePickerMode.date]
-  /// and [CupertinoDatePickerMode.dateAndTime] mode. Null if there's no limit.
+  /// The maximum selectable date that the picker can settle on.
+  ///
+  /// When non-null, the user can still scroll the picker to [DateTime]s later
+  /// than [maximumDate], but the [onDateChangeCallback] will not be called on
+  /// these [DateTime]s. Once let go, the picker will scroll back to [maximumDate].
+  ///
+  /// In [CupertinoDatePickerMode.time] mode, a time becomes unselectable if the
+  /// [DateTime] produced by combining that particular time and the date part of
+  /// [initialDateTime] is later than [maximumDate]. So typically [maximumDate]
+  /// needs to be set to a [DateTime] that is on the same date as [initialDateTime].
+  ///
+  /// Defaults to null. When set to null, the picker does not impose a limit on
+  /// the latest [DateTime] the user can select.
   final DateTime maximumDate;
 
   /// Minimum year that the picker can be scrolled to in
@@ -317,8 +345,11 @@ class CupertinoDatePicker extends StatefulWidget {
   /// Whether to use 24 hour format. Defaults to false.
   final bool use24hFormat;
 
-  /// Callback called when the selected date and/or time changes. Must not be
-  /// null.
+  /// Callback called when the selected date and/or time changes. If the new
+  /// selected [DateTime] is not valid, or is not in the [minimumDate] through
+  /// [maximumDate] range, this callback will not be called.
+  ///
+  /// Must not be null.
   final ValueChanged<DateTime> onDateTimeChanged;
 
   /// Background color of date picker.
@@ -684,7 +715,7 @@ class _CupertinoDatePickerDateTimeState extends State<CupertinoDatePicker> {
     );
   }
 
-  // With the meridem picker set to `meridiemIndex`, and the hour picker set to
+  // With the meridiem picker set to `meridiemIndex`, and the hour picker set to
   // `hourIndex`, is it possible to change the value of the minute picker, so
   // that the resulting date stays in the valid range.
   bool _isValidHour(int meridiemIndex, int hourIndex) {
@@ -1215,12 +1246,14 @@ class _CupertinoDatePickerDateState extends State<CupertinoDatePicker> {
   }
 
   bool get _isCurrentDateValid {
-    final DateTime selectedDate = DateTime(selectedYear, selectedMonth, selectedDay);
+    // The current date selection represents a range [minSelectedData, maxSelectDate].
+    final DateTime minSelectedDate = DateTime(selectedYear, selectedMonth, selectedDay);
+    final DateTime maxSelectedDate = DateTime(selectedYear, selectedMonth, selectedDay + 1);
 
-    final bool minCheck = widget.minimumDate?.isAfter(selectedDate) ?? false;
-    final bool maxCheck = widget.maximumDate?.isBefore(selectedDate) ?? false;
+    final bool minCheck = widget.minimumDate?.isBefore(maxSelectedDate) ?? true;
+    final bool maxCheck = widget.maximumDate?.isBefore(minSelectedDate) ?? false;
 
-    return !minCheck && !maxCheck && selectedDate.day == selectedDay;
+    return minCheck && !maxCheck && minSelectedDate.day == selectedDay;
   }
 
   // One or more pickers have just stopped scrolling.
@@ -1235,21 +1268,22 @@ class _CupertinoDatePickerDateState extends State<CupertinoDatePicker> {
 
     // Whenever scrolling lands on an invalid entry, the picker
     // automatically scrolls to a valid one.
-    final DateTime selectedDate = DateTime(selectedYear, selectedMonth, selectedDay);
+    final DateTime minSelectDate = DateTime(selectedYear, selectedMonth, selectedDay);
+    final DateTime maxSelectDate = DateTime(selectedYear, selectedMonth, selectedDay + 1);
 
-    final bool minCheck = widget.minimumDate?.isAfter(selectedDate) ?? false;
-    final bool maxCheck = widget.maximumDate?.isBefore(selectedDate) ?? false;
+    final bool minCheck = widget.minimumDate?.isBefore(maxSelectDate) ?? true;
+    final bool maxCheck = widget.maximumDate?.isBefore(minSelectDate) ?? false;
 
-    if (minCheck || maxCheck) {
+    if (!minCheck || maxCheck) {
       // We have minCheck === !maxCheck.
-      final DateTime targetDate = minCheck ? widget.minimumDate : widget.maximumDate;
+      final DateTime targetDate = minCheck ? widget.maximumDate : widget.minimumDate;
       _scrollToDate(targetDate);
       return;
     }
 
     // Some months have less days (e.g. February). Go to the last day of that month
     // if the selectedDay exceeds the maximum.
-    if (selectedDate.day != selectedDay) {
+    if (minSelectDate.day != selectedDay) {
       final DateTime lastDay = _lastDayInMonth(selectedYear, selectedMonth);
       _scrollToDate(lastDay);
     }
