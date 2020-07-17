@@ -255,7 +255,7 @@ class AOTSnapshotter {
     List<String> isysrootArgs;
     if (isIos || isTvos) {
       final SdkType sdk = xcodePlatformToSdkType(xcodePlatform);
-      final String sdkLocation = await xcode.sdkLocation(sdk);
+      final String sdkLocation = await _xcode.sdkLocation(sdk);
       if (sdkLocation != null) {
         isysrootArgs = <String>['-isysroot', sdkLocation];
       }

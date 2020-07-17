@@ -468,9 +468,15 @@ class XCDevice {
         continue;
       }
       final Map<String, dynamic> deviceProperties = device as Map<String, dynamic>;
+      XcodePlatform _xcodePlatform;
 
       // Only include iPhone, iPad, iPod, or other iOS devices.
-      if (!_isIPhoneOSDevice(deviceProperties)) {
+      // [lynn] Also allow tvOS devices.
+      if (_isIPhoneOSDevice(deviceProperties)) {
+        _xcodePlatform = XcodePlatform.ios;
+      } else if (_isTvOSDevice(deviceProperties)) {
+        _xcodePlatform = XcodePlatform.tvos;
+      } else {
         continue;
       }
 
@@ -512,6 +518,7 @@ class XCDevice {
         iosDeploy: _iosDeploy,
         iMobileDevice: _iMobileDevice,
         platform: globals.platform,
+        xcodePlatform: _xcodePlatform,
         vmServiceConnectUri: vm_service_io.vmServiceConnectUri,
       ));
     }
@@ -524,6 +531,14 @@ class XCDevice {
     if (deviceProperties.containsKey('platform')) {
       final String platform = deviceProperties['platform'] as String;
       return platform == 'com.apple.platform.iphoneos';
+    }
+    return false;
+  }
+
+  static bool _isTvOSDevice(Map<String, dynamic> deviceProperties) {
+    if (deviceProperties.containsKey('platform')) {
+      final String platform = deviceProperties['platform'] as String;
+      return platform == 'com.apple.platform.appletvos';
     }
     return false;
   }

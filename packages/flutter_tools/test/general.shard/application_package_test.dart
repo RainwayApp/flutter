@@ -214,7 +214,7 @@ void main() {
     });
   });
 
-  group('PrebuiltIOSApp', () {
+  group('PrebuiltIOSLikeApp', () {
     MockOperatingSystemUtils os;
     final Map<Type, Generator> overrides = <Type, Generator>{
       FileSystem: () => MemoryFileSystem(),
@@ -229,8 +229,8 @@ void main() {
     });
 
     testUsingContext('Error on non-existing file', () {
-      final PrebuiltIOSApp iosApp =
-          IOSApp.fromPrebuiltApp(globals.fs.file('not_existing.ipa')) as PrebuiltIOSApp;
+      final PrebuiltIOSLikeApp iosApp =
+          IOSLikeApp.fromPrebuiltApp(globals.fs.file('not_existing.ipa')) as PrebuiltIOSLikeApp;
       expect(iosApp, isNull);
       expect(
         testLogger.errorText,
@@ -240,8 +240,8 @@ void main() {
 
     testUsingContext('Error on non-app-bundle folder', () {
       globals.fs.directory('regular_folder').createSync();
-      final PrebuiltIOSApp iosApp =
-          IOSApp.fromPrebuiltApp(globals.fs.file('regular_folder')) as PrebuiltIOSApp;
+      final PrebuiltIOSLikeApp iosApp =
+          IOSLikeApp.fromPrebuiltApp(globals.fs.file('regular_folder')) as PrebuiltIOSLikeApp;
       expect(iosApp, isNull);
       expect(
           testLogger.errorText, 'Folder "regular_folder" is not an app bundle.\n');
@@ -249,7 +249,7 @@ void main() {
 
     testUsingContext('Error on no info.plist', () {
       globals.fs.directory('bundle.app').createSync();
-      final PrebuiltIOSApp iosApp = IOSApp.fromPrebuiltApp(globals.fs.file('bundle.app')) as PrebuiltIOSApp;
+      final PrebuiltIOSLikeApp iosApp = IOSLikeApp.fromPrebuiltApp(globals.fs.file('bundle.app')) as PrebuiltIOSLikeApp;
       expect(iosApp, isNull);
       expect(
         testLogger.errorText,
@@ -260,7 +260,7 @@ void main() {
     testUsingContext('Error on bad info.plist', () {
       globals.fs.directory('bundle.app').createSync();
       globals.fs.file('bundle.app/Info.plist').writeAsStringSync(badPlistData);
-      final PrebuiltIOSApp iosApp = IOSApp.fromPrebuiltApp(globals.fs.file('bundle.app')) as PrebuiltIOSApp;
+      final PrebuiltIOSLikeApp iosApp = IOSLikeApp.fromPrebuiltApp(globals.fs.file('bundle.app')) as PrebuiltIOSLikeApp;
       expect(iosApp, isNull);
       expect(
         testLogger.errorText,
@@ -272,7 +272,7 @@ void main() {
     testUsingContext('Success with app bundle', () {
       globals.fs.directory('bundle.app').createSync();
       globals.fs.file('bundle.app/Info.plist').writeAsStringSync(plistData);
-      final PrebuiltIOSApp iosApp = IOSApp.fromPrebuiltApp(globals.fs.file('bundle.app')) as PrebuiltIOSApp;
+      final PrebuiltIOSLikeApp iosApp = IOSLikeApp.fromPrebuiltApp(globals.fs.file('bundle.app')) as PrebuiltIOSLikeApp;
       expect(testLogger.errorText, isEmpty);
       expect(iosApp.bundleDir.path, 'bundle.app');
       expect(iosApp.id, 'fooBundleId');
@@ -282,7 +282,7 @@ void main() {
     testUsingContext('Bad ipa zip-file, no payload dir', () {
       globals.fs.file('app.ipa').createSync();
       when(os.unzip(globals.fs.file('app.ipa'), any)).thenAnswer((Invocation _) { });
-      final PrebuiltIOSApp iosApp = IOSApp.fromPrebuiltApp(globals.fs.file('app.ipa')) as PrebuiltIOSApp;
+      final PrebuiltIOSLikeApp iosApp = IOSLikeApp.fromPrebuiltApp(globals.fs.file('app.ipa')) as PrebuiltIOSLikeApp;
       expect(iosApp, isNull);
       expect(
         testLogger.errorText,
@@ -305,7 +305,7 @@ void main() {
         globals.fs.directory(bundlePath1).createSync(recursive: true);
         globals.fs.directory(bundlePath2).createSync(recursive: true);
       });
-      final PrebuiltIOSApp iosApp = IOSApp.fromPrebuiltApp(globals.fs.file('app.ipa')) as PrebuiltIOSApp;
+      final PrebuiltIOSLikeApp iosApp = IOSLikeApp.fromPrebuiltApp(globals.fs.file('app.ipa')) as PrebuiltIOSLikeApp;
       expect(iosApp, isNull);
       expect(testLogger.errorText,
           'Invalid prebuilt iOS ipa. Does not contain a single app bundle.\n');
@@ -326,7 +326,7 @@ void main() {
             .file(globals.fs.path.join(bundleAppDir.path, 'Info.plist'))
             .writeAsStringSync(plistData);
       });
-      final PrebuiltIOSApp iosApp = IOSApp.fromPrebuiltApp(globals.fs.file('app.ipa')) as PrebuiltIOSApp;
+      final PrebuiltIOSLikeApp iosApp = IOSLikeApp.fromPrebuiltApp(globals.fs.file('app.ipa')) as PrebuiltIOSLikeApp;
       expect(testLogger.errorText, isEmpty);
       expect(iosApp.bundleDir.path, endsWith('bundle.app'));
       expect(iosApp.id, 'fooBundleId');
@@ -336,8 +336,8 @@ void main() {
     testUsingContext('returns null when there is no ios or .ios directory', () async {
       globals.fs.file('pubspec.yaml').createSync();
       globals.fs.file('.packages').createSync();
-      final BuildableIOSApp iosApp = await IOSApp.fromIosProject(
-        FlutterProject.fromDirectory(globals.fs.currentDirectory).ios, null) as BuildableIOSApp;
+      final BuildableIOSLikeApp iosApp = await IOSLikeApp.fromIosProject(
+        FlutterProject.fromDirectory(globals.fs.currentDirectory).ios, null) as BuildableIOSLikeApp;
 
       expect(iosApp, null);
     }, overrides: overrides);
@@ -346,8 +346,8 @@ void main() {
       globals.fs.file('pubspec.yaml').createSync();
       globals.fs.file('.packages').createSync();
       globals.fs.file('ios/FooBar.xcodeproj').createSync(recursive: true);
-      final BuildableIOSApp iosApp = await IOSApp.fromIosProject(
-        FlutterProject.fromDirectory(globals.fs.currentDirectory).ios, null) as BuildableIOSApp;
+      final BuildableIOSLikeApp iosApp = await IOSLikeApp.fromIosProject(
+        FlutterProject.fromDirectory(globals.fs.currentDirectory).ios, null) as BuildableIOSLikeApp;
 
       expect(iosApp, null);
     }, overrides: overrides);
@@ -356,8 +356,8 @@ void main() {
       globals.fs.file('pubspec.yaml').createSync();
       globals.fs.file('.packages').createSync();
       globals.fs.file('ios/Runner.xcodeproj').createSync(recursive: true);
-      final BuildableIOSApp iosApp = await IOSApp.fromIosProject(
-        FlutterProject.fromDirectory(globals.fs.currentDirectory).ios, null) as BuildableIOSApp;
+      final BuildableIOSLikeApp iosApp = await IOSLikeApp.fromIosProject(
+        FlutterProject.fromDirectory(globals.fs.currentDirectory).ios, null) as BuildableIOSLikeApp;
 
       expect(iosApp, null);
     }, overrides: overrides);

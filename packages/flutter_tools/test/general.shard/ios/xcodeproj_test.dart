@@ -586,7 +586,6 @@ Information about project "Runner":
       await updateGeneratedXcodeProperties(
         project: project,
         buildInfo: buildInfo,
-        useMacOSConfig: true,
       );
 
       final File config = fs.file('path/to/project/macos/Flutter/ephemeral/Flutter-Generated.xcconfig');

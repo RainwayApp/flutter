@@ -15,7 +15,7 @@ import 'ios_migrator.dart';
 // Remove the linking and embedding logic from the Xcode project to give the tool more control over these.
 class RemoveFrameworkLinkAndEmbeddingMigration extends IOSMigrator {
   RemoveFrameworkLinkAndEmbeddingMigration(
-    IosProject project,
+    IosLikeProject project,
     Logger logger,
     Xcode xcode,
     Usage usage,

@@ -734,6 +734,7 @@ https://flutter.dev/docs/development/packages-and-plugins/developing-packages#pl
     bool renderDriverTest = false,
     bool withPluginHook = false,
     bool ios = false,
+    bool tvos = false,
     bool android = false,
     bool web = false,
     bool linux = false,

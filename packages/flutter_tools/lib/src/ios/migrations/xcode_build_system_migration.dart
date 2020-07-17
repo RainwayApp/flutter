@@ -12,7 +12,7 @@ import 'ios_migrator.dart';
 // Removed in https://github.com/flutter/flutter/pull/33684.
 class XcodeBuildSystemMigration extends IOSMigrator {
   XcodeBuildSystemMigration(
-    IosProject project,
+    IosLikeProject project,
     Logger logger,
   ) : _xcodeWorkspaceSharedSettings = project.xcodeWorkspaceSharedSettings,
       super(logger);

@@ -86,7 +86,7 @@ void main() {
     final IOSDevice device = setUpIOSDevice();
     final DevicePortForwarder devicePortForwarder = MockDevicePortForwarder();
     final DeviceLogReader deviceLogReader = MockDeviceLogReader();
-    final IOSApp iosApp = PrebuiltIOSApp(
+    final IOSLikeApp iosApp = PrebuiltIOSLikeApp(
       projectBundleId: 'app',
       bundleName: 'Runner',
     );
@@ -116,7 +116,7 @@ void main() {
         );
       },
     );
-    final IOSApp iosApp = PrebuiltIOSApp(
+    final IOSLikeApp iosApp = PrebuiltIOSLikeApp(
       projectBundleId: 'app',
       bundleName: 'Runner',
       bundleDir: fileSystem.currentDirectory,
@@ -170,7 +170,7 @@ void main() {
         );
       },
     );
-    final IOSApp iosApp = PrebuiltIOSApp(
+    final IOSLikeApp iosApp = PrebuiltIOSLikeApp(
       projectBundleId: 'app',
       bundleName: 'Runner',
       bundleDir: fileSystem.currentDirectory,
@@ -223,7 +223,7 @@ void main() {
         );
       },
     );
-    final IOSApp iosApp = PrebuiltIOSApp(
+    final IOSLikeApp iosApp = PrebuiltIOSLikeApp(
       projectBundleId: 'app',
       bundleName: 'Runner',
       bundleDir: fileSystem.currentDirectory,
@@ -274,7 +274,7 @@ void main() {
       processManager: processManager,
       fileSystem: fileSystem,
     );
-    final IOSApp iosApp = PrebuiltIOSApp(
+    final IOSLikeApp iosApp = PrebuiltIOSLikeApp(
       projectBundleId: 'app',
       bundleName: 'Runner',
       bundleDir: fileSystem.currentDirectory,
@@ -346,7 +346,7 @@ void main() {
         );
       },
     );
-    final IOSApp iosApp = PrebuiltIOSApp(
+    final IOSLikeApp iosApp = PrebuiltIOSLikeApp(
       projectBundleId: 'app',
       bundleName: 'Runner',
       bundleDir: fileSystem.currentDirectory,

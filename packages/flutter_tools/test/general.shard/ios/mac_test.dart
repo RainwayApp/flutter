@@ -165,7 +165,7 @@ void main() {
         ),
       );
 
-      await diagnoseXcodeBuildFailure(buildResult, 'ios', mockUsage, logger);
+      await diagnoseXcodeBuildFailure(buildResult, mockUsage, logger);
       verify(mockUsage.sendEvent('build',
         any,
         label: 'xcode-bitcode-failure',
@@ -241,7 +241,7 @@ Error launching application on iPhone.''',
         ),
       );
 
-      await diagnoseXcodeBuildFailure(buildResult, 'ios', mockUsage, logger);
+      await diagnoseXcodeBuildFailure(buildResult, mockUsage, logger);
       expect(
         logger.errorText,
         contains("No Provisioning Profile was found for your project's Bundle Identifier or your \ndevice."),
@@ -322,7 +322,7 @@ Could not build the precompiled application for the device.''',
         ),
       );
 
-      await diagnoseXcodeBuildFailure(buildResult, 'ios', mockUsage, logger);
+      await diagnoseXcodeBuildFailure(buildResult, mockUsage, logger);
       expect(
         logger.errorText,
         contains('Building a deployable iOS app requires a selected Development Team with a \nProvisioning Profile.'),

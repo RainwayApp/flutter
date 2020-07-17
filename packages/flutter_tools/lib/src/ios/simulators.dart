@@ -478,7 +478,7 @@ class IOSSimulator extends Device {
     return LaunchResult.failed();
   }
 
-  Future<void> _setupUpdatedApplicationBundle(covariant BuildableLikeIOSApp app, BuildInfo buildInfo, String mainPath) async {
+  Future<void> _setupUpdatedApplicationBundle(covariant BuildableIOSLikeApp app, BuildInfo buildInfo, String mainPath) async {
     // Step 1: Build the Xcode project.
     // The build mode for the simulator is always debug.
     assert(buildInfo.isDebug);

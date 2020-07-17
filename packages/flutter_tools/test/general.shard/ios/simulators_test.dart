@@ -582,7 +582,7 @@ Dec 20 17:04:32 md32-11-vm1 Another App[88374]: Ignore this text'''
           xcode: mockXcode,
         );
         final DeviceLogReader logReader = device.getLogReader(
-          app: await BuildableIOSApp.fromProject(mockIosProject, null),
+          app: await BuildableIOSLikeApp.fromProject(mockIosProject, null),
         );
 
         final List<String> lines = await logReader.logLines.toList();
@@ -616,7 +616,7 @@ Dec 20 17:04:32 md32-11-vm1 Another App[88374]: Ignore this text'''
           xcode: mockXcode,
         );
         final DeviceLogReader logReader = device.getLogReader(
-          app: await BuildableIOSApp.fromProject(mockIosProject, null),
+          app: await BuildableIOSLikeApp.fromProject(mockIosProject, null),
         );
 
         final List<String> lines = await logReader.logLines.toList();
@@ -663,7 +663,7 @@ Dec 20 17:04:32 md32-11-vm1 Another App[88374]: Ignore this text'''
           xcode: mockXcode,
         );
         final DeviceLogReader logReader = device.getLogReader(
-          app: await BuildableIOSApp.fromProject(mockIosProject, null),
+          app: await BuildableIOSLikeApp.fromProject(mockIosProject, null),
         );
 
         final List<String> lines = await logReader.logLines.toList();
@@ -728,7 +728,7 @@ Dec 20 17:04:32 md32-11-vm1 Another App[88374]: Ignore this text'''
           xcode: mockXcode,
         );
         final DeviceLogReader logReader = device.getLogReader(
-          app: await BuildableIOSApp.fromProject(mockIosProject, null),
+          app: await BuildableIOSLikeApp.fromProject(mockIosProject, null),
         );
 
         final List<String> lines = await logReader.logLines.toList();
@@ -903,7 +903,7 @@ Dec 20 17:04:32 md32-11-vm1 Another App[88374]: Ignore this text'''
       when(globals.plistParser.getValueFromFile(any, any)).thenReturn('correct');
 
       final Directory mockDir = globals.fs.currentDirectory;
-      final IOSApp package = PrebuiltIOSApp(projectBundleId: 'incorrect', bundleName: 'name', bundleDir: mockDir);
+      final IOSLikeApp package = PrebuiltIOSLikeApp(projectBundleId: 'incorrect', bundleName: 'name', bundleDir: mockDir);
 
       const BuildInfo mockInfo = BuildInfo(BuildMode.debug, 'flavor', treeShakeIcons: false);
       final DebuggingOptions mockOptions = DebuggingOptions.disabled(mockInfo);

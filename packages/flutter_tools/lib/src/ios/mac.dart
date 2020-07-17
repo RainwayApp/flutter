@@ -96,7 +96,7 @@ Future<XcodeBuildResult> buildXcodeProject({
   bool buildForDevice,
   DarwinArch activeArch,
   bool codesign = true,
-  XcodePlatform platform,
+  @required XcodePlatform platform,
   String deviceID,
 }) async {
   if (!upgradePbxProjWithFlutterAssets(app.project, globals.logger)) {
@@ -141,6 +141,7 @@ Future<XcodeBuildResult> buildXcodeProject({
   if (scheme == null) {
     projectInfo.reportFlavorNotFoundAndExit();
   }
+  final String buildFolder = getNameForTargetPlatform(xcodeToTargetPlatform(platform));
   final String configuration = projectInfo.buildConfigurationFor(buildInfo, scheme);
   if (configuration == null) {
     globals.printError('');
@@ -249,7 +250,7 @@ Future<XcodeBuildResult> buildXcodeProject({
       buildCommands.addAll(<String>[
         '-workspace', globals.fs.path.basename(entity.path),
         '-scheme', scheme,
-        'BUILD_DIR=${globals.fs.path.absolute(buildDirectory)}',
+        'BUILD_DIR=${globals.fs.path.absolute(subproject.buildDirectory)}',
       ]);
       break;
     }

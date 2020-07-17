@@ -70,7 +70,7 @@ void main() {
           verboseHelp: false,
         );
 
-        expect(() => command.produceFlutterPodspec(BuildMode.debug, outputDirectory),
+        expect(() => command.produceFlutterPodspec(BuildMode.debug, outputDirectory, TargetPlatform.ios),
             throwsToolExit(message: 'Detected version is $frameworkVersion'));
       }, overrides: <Type, Generator>{
         FileSystem: () => memoryFileSystem,
@@ -95,7 +95,7 @@ void main() {
           verboseHelp: false,
         );
 
-        expect(() => command.produceFlutterPodspec(BuildMode.debug, outputDirectory),
+        expect(() => command.produceFlutterPodspec(BuildMode.debug, outputDirectory, TargetPlatform.ios),
             throwsToolExit(message: 'Detected version is $frameworkVersion'));
       }, overrides: <Type, Generator>{
         FileSystem: () => memoryFileSystem,
@@ -117,7 +117,7 @@ void main() {
           verboseHelp: false,
         );
 
-        expect(() => command.produceFlutterPodspec(BuildMode.debug, outputDirectory),
+        expect(() => command.produceFlutterPodspec(BuildMode.debug, outputDirectory, TargetPlatform.ios),
             throwsToolExit(message: 'Could not find license'));
       }, overrides: <Type, Generator>{
         FileSystem: () => memoryFileSystem,
@@ -154,7 +154,7 @@ void main() {
               cache: mockCache,
               verboseHelp: false,
             );
-            command.produceFlutterPodspec(BuildMode.debug, outputDirectory, force: true);
+            command.produceFlutterPodspec(BuildMode.debug, outputDirectory, TargetPlatform.ios, force: true);
 
             final File expectedPodspec = outputDirectory.childFile('Flutter.podspec');
             expect(expectedPodspec.existsSync(), isTrue);
@@ -177,7 +177,7 @@ void main() {
               cache: mockCache,
               verboseHelp: false,
             );
-            command.produceFlutterPodspec(BuildMode.debug, outputDirectory);
+            command.produceFlutterPodspec(BuildMode.debug, outputDirectory, TargetPlatform.ios);
 
             final File expectedPodspec = outputDirectory.childFile('Flutter.podspec');
             final String podspecContents = expectedPodspec.readAsStringSync();
@@ -197,7 +197,7 @@ void main() {
               cache: mockCache,
               verboseHelp: false,
             );
-            command.produceFlutterPodspec(BuildMode.debug, outputDirectory);
+            command.produceFlutterPodspec(BuildMode.debug, outputDirectory, TargetPlatform.ios);
 
             final File expectedPodspec = outputDirectory.childFile('Flutter.podspec');
             final String podspecContents = expectedPodspec.readAsStringSync();
@@ -215,7 +215,7 @@ void main() {
               cache: mockCache,
               verboseHelp: false,
             );
-            command.produceFlutterPodspec(BuildMode.profile, outputDirectory);
+            command.produceFlutterPodspec(BuildMode.profile, outputDirectory, TargetPlatform.ios);
 
             final File expectedPodspec = outputDirectory.childFile('Flutter.podspec');
             final String podspecContents = expectedPodspec.readAsStringSync();
@@ -233,7 +233,7 @@ void main() {
               cache: mockCache,
               verboseHelp: false,
             );
-            command.produceFlutterPodspec(BuildMode.release, outputDirectory);
+            command.produceFlutterPodspec(BuildMode.release, outputDirectory, TargetPlatform.ios);
 
             final File expectedPodspec = outputDirectory.childFile('Flutter.podspec');
             final String podspecContents = expectedPodspec.readAsStringSync();

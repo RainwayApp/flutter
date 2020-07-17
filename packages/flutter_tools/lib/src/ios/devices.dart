@@ -152,6 +152,7 @@ class IOSDevice extends Device {
     @required this.interfaceType,
     @required String sdkVersion,
     @required Platform platform,
+    @required XcodePlatform xcodePlatform,
     @required Artifacts artifacts,
     @required IOSDeploy iosDeploy,
     @required IMobileDevice iMobileDevice,
@@ -164,11 +165,12 @@ class IOSDevice extends Device {
       _fileSystem = fileSystem,
       _logger = logger,
       _platform = platform,
+      _xcodePlatform = xcodePlatform,
       _vmServiceConnectUri = vmServiceConnectUri,
         super(
           id,
           category: Category.mobile,
-          platformType: xcodeToPlatformType(platform),
+          platformType: xcodeToPlatformType(xcodePlatform),
           ephemeral: true,
       ) {
     if (!platform.isMacOS) {
@@ -188,6 +190,7 @@ class IOSDevice extends Device {
   final FileSystem _fileSystem;
   final Logger _logger;
   final Platform _platform;
+  final XcodePlatform _xcodePlatform;
   final IMobileDevice _iMobileDevice;
   final VmServiceConnector _vmServiceConnectUri;
 
@@ -216,7 +219,7 @@ class IOSDevice extends Device {
 
   final IOSDeviceInterface interfaceType;
 
-  Map<IOSApp, DeviceLogReader> _logReaders;
+  Map<IOSLikeApp, DeviceLogReader> _logReaders;
 
   DevicePortForwarder _portForwarder;
 
@@ -231,7 +234,7 @@ class IOSDevice extends Device {
 
   @override
   Future<bool> isAppInstalled(
-    IOSApp app, {
+    IOSLikeApp app, {
     String userIdentifier,
   }) async {
     bool result;
@@ -252,7 +255,7 @@ class IOSDevice extends Device {
 
   @override
   Future<bool> installApp(
-    IOSApp app, {
+    IOSLikeApp app, {
     String userIdentifier,
   }) async {
     final Directory bundle = _fileSystem.directory(app.deviceBundlePath);
@@ -285,7 +288,7 @@ class IOSDevice extends Device {
 
   @override
   Future<bool> uninstallApp(
-    IOSApp app, {
+    IOSLikeApp app, {
     String userIdentifier,
   }) async {
     int uninstallationResult;
@@ -327,12 +330,14 @@ class IOSDevice extends Device {
       _logger.printTrace('Building ${package.name} for $id');
 
       // Step 1: Build the precompiled/DBC application if necessary.
+      final BuildableIOSLikeApp app = package as BuildableIOSLikeApp;
       final XcodeBuildResult buildResult = await buildXcodeProject(
-          app: package as BuildableIOSLikeApp,
+          app: app,
           buildInfo: debuggingOptions.buildInfo,
           targetOverride: mainPath,
           buildForDevice: true,
           activeArch: cpuArchitecture,
+          platform: app.project.xcodePlatform,
           deviceID: id,
       );
       if (!buildResult.success) {
@@ -460,7 +465,7 @@ class IOSDevice extends Device {
 
   @override
   Future<bool> stopApp(
-    IOSApp app, {
+    IOSLikeApp app, {
     String userIdentifier,
   }) async {
     // Currently we don't have a way to stop an app running on iOS.
@@ -468,18 +473,18 @@ class IOSDevice extends Device {
   }
 
   @override
-  Future<TargetPlatform> get targetPlatform async => xcodeToTargetPlatform(platform);
+  Future<TargetPlatform> get targetPlatform async => xcodeToTargetPlatform(_xcodePlatform);
 
   @override
-  Future<String> get sdkNameAndVersion async => '$platform $_sdkVersion';
+  Future<String> get sdkNameAndVersion async => '$_xcodePlatform $_sdkVersion';
 
   @override
   DeviceLogReader getLogReader({
-    IOSApp app,
+    IOSLikeApp app,
     bool includePastLogs = false,
   }) {
     assert(!includePastLogs, 'Past log reading not supported on iOS devices.');
-    _logReaders ??= <IOSApp, DeviceLogReader>{};
+    _logReaders ??= <IOSLikeApp, DeviceLogReader>{};
     return _logReaders.putIfAbsent(app, () => IOSDeviceLogReader.create(
       device: this,
       app: app,
@@ -521,12 +526,12 @@ class IOSDevice extends Device {
 
   @override
   bool isSupportedForProject(FlutterProject flutterProject) {
-    return flutterProject.xcodeSubproject(platform).existsSync();
+    return flutterProject.xcodeSubproject(_xcodePlatform).existsSync();
   }
 
   @override
   Future<void> dispose() async {
-    _logReaders?.forEach((IOSApp application, DeviceLogReader logReader) {
+    _logReaders?.forEach((IOSLikeApp application, DeviceLogReader logReader) {
       logReader.dispose();
     });
     await _portForwarder?.dispose();
@@ -622,7 +627,7 @@ class IOSDeviceLogReader extends DeviceLogReader {
   /// Create a new [IOSDeviceLogReader].
   factory IOSDeviceLogReader.create({
     @required IOSDevice device,
-    @required IOSApp app,
+    @required IOSLikeApp app,
     @required IMobileDevice iMobileDevice,
   }) {
     final String appName = app == null ? '' : app.name.replaceAll('.app', '');

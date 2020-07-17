@@ -393,7 +393,7 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
 
   static final RegExp _productBundleIdPattern = RegExp(r'''^\s*PRODUCT_BUNDLE_IDENTIFIER\s*=\s*(["']?)(.*?)\1;\s*$''');
   static const String _productBundleIdVariable = r'$(PRODUCT_BUNDLE_IDENTIFIER)';
-  static const String _hostAppProjectName = 'Runner';
+  static const String hostAppProjectName = 'Runner';
 
   Directory get ephemeralDirectory => parent.directory.childDirectory('.$buildFolder');
   Directory get _editableDirectory => parent.directory.childDirectory(buildFolder);
@@ -416,8 +416,8 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
 
   Directory get _flutterLibDirectory => _flutterLibRoot.childDirectory(flutterLibDirectoryName);
 
-  /// The bundle name of the host app, `Runner.app` or `Runner-tvos.app`.
-  String get hostAppBundleName => '$runnerTargetName.app';
+  // /// The bundle name of the host app, `Runner.app` or `Runner-tvos.app`.
+  // String get hostAppBundleName => '$runnerTargetName.app';
 
   /// True, if the parent Flutter project is a module project.
   bool get isModule => parent.isModule;
@@ -441,18 +441,18 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
   File get podManifestLock => hostAppRoot.childDirectory('Pods').childFile('Manifest.lock');
 
   /// The default 'Info.plist' file of the host app. The developer can change this location in Xcode.
-  File get defaultHostInfoPlist => hostAppRoot.childDirectory(_hostAppProjectName).childFile('Info.plist');
+  File get defaultHostInfoPlist => hostAppRoot.childDirectory(hostAppProjectName).childFile('Info.plist');
 
   Directory get symlinks => _flutterLibRoot.childDirectory('.symlinks');
 
   @override
-  Directory get xcodeProject => hostAppRoot.childDirectory('$_hostAppProjectName.xcodeproj');
+  Directory get xcodeProject => hostAppRoot.childDirectory('$hostAppProjectName.xcodeproj');
 
   @override
   File get xcodeProjectInfoFile => xcodeProject.childFile('project.pbxproj');
 
   @override
-  Directory get xcodeWorkspace => hostAppRoot.childDirectory('$_hostAppProjectName.xcworkspace');
+  Directory get xcodeWorkspace => hostAppRoot.childDirectory('$hostAppProjectName.xcworkspace');
 
   /// Xcode workspace shared data directory for the host app.
   Directory get xcodeWorkspaceSharedData => xcodeWorkspace.childDirectory('xcshareddata');
@@ -532,16 +532,16 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
     // https://flutter.dev/docs/deployment/ios#review-xcode-project-settings
     // The only source of truth for the name is Xcode's interpretation of the build settings.
     String productName;
-    if (globals.xcodeProjectInterpreter.isInstalled) {
-      final Map<String, String> xcodeBuildSettings = await buildSettingsForBuildInfo(buildInfo);
-      if (xcodeBuildSettings != null) {
-        productName = xcodeBuildSettings['FULL_PRODUCT_NAME'];
-      }
-    }
-    if (productName == null) {
-      globals.printTrace('FULL_PRODUCT_NAME not present, defaulting to $_hostAppProjectName');
-    }
-    return productName ?? '$_hostAppProjectName.app';
+    // if (globals.xcodeProjectInterpreter.isInstalled) {
+    //   final Map<String, String> xcodeBuildSettings = await buildSettingsForBuildInfo(buildInfo);
+    //   if (xcodeBuildSettings != null) {
+    //     productName = xcodeBuildSettings['FULL_PRODUCT_NAME'];
+    //   }
+    // }
+    // if (productName == null) {
+    //   globals.printTrace('FULL_PRODUCT_NAME not present, defaulting to $hostAppProjectName');
+    // }
+    return productName ?? '$hostAppProjectName.app';
   }
 
   /// The build settings for the host app of this project, as a detached map.
@@ -669,7 +669,7 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
     final Directory framework = globals.fs.directory(
       globals.artifacts.getArtifactPath(
         Artifact.flutterFramework,
-        platform: TargetPlatform.ios, // TODO lynn 2020 07
+        platform: xcodeToTargetPlatform(xcodePlatform),
         mode: mode,
       )
     );
@@ -696,7 +696,7 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
   Directory get pluginRegistrantHost {
     return isModule
         ? _flutterLibDirectory.childDirectory('FlutterPluginRegistrant')
-        : hostAppRoot.childDirectory(_hostAppProjectName);
+        : hostAppRoot.childDirectory(hostAppProjectName);
   }
 
   Future<void> _overwriteFromTemplate(String path, Directory target) async {
@@ -1024,10 +1024,10 @@ class MacOSProject extends FlutterProjectPlatform implements XcodeBasedProject {
   @override
   String get pluginConfigKey => MacOSPlugin.kConfigKey;
 
-  static const String _hostAppProjectName = 'Runner';
+  static const String hostAppProjectName = 'Runner';
 
   @override
-  String get runnerTargetName => _hostAppBundleName;
+  String get runnerTargetName => 'Runner';
 
   @override
   bool existsSync() => _macOSDirectory.existsSync();
@@ -1071,13 +1071,13 @@ class MacOSProject extends FlutterProjectPlatform implements XcodeBasedProject {
   File get podManifestLock => _macOSDirectory.childDirectory('Pods').childFile('Manifest.lock');
 
   @override
-  Directory get xcodeProject => _macOSDirectory.childDirectory('$_hostAppProjectName.xcodeproj');
+  Directory get xcodeProject => _macOSDirectory.childDirectory('$hostAppProjectName.xcodeproj');
 
   @override
   File get xcodeProjectInfoFile => xcodeProject.childFile('project.pbxproj');
 
   @override
-  Directory get xcodeWorkspace => _macOSDirectory.childDirectory('$_hostAppProjectName.xcworkspace');
+  Directory get xcodeWorkspace => _macOSDirectory.childDirectory('$hostAppProjectName.xcworkspace');
 
   /// The file where the Xcode build will write the name of the built app.
   ///

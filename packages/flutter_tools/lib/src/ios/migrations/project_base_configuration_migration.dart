@@ -11,7 +11,7 @@ import 'ios_migrator.dart';
 // However the top-level Runner project should not inherit any build configuration so
 // the Flutter build settings do not stomp on non-Flutter targets.
 class ProjectBaseConfigurationMigration extends IOSMigrator {
-  ProjectBaseConfigurationMigration(IosProject project, Logger logger)
+  ProjectBaseConfigurationMigration(IosLikeProject project, Logger logger)
     : _xcodeProjectInfoFile = project.xcodeProjectInfoFile,
       super(logger);
 

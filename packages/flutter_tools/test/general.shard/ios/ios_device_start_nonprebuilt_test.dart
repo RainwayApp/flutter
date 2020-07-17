@@ -106,7 +106,7 @@ void main() {
       );
       setUpIOSProject(fileSystem);
       final FlutterProject flutterProject = FlutterProject.fromDirectory(fileSystem.currentDirectory);
-      final BuildableIOSApp buildableIOSApp = BuildableIOSApp(flutterProject.ios, 'flutter', 'My Super Awesome App.app');
+      final BuildableIOSLikeApp buildableIOSApp = BuildableIOSLikeApp(flutterProject.ios, 'flutter', 'My Super Awesome App.app');
 
       processManager.addCommand(FakeCommand(command: _xattrArgs(flutterProject)));
       processManager.addCommand(const FakeCommand(command: kRunReleaseArgs));
@@ -157,7 +157,7 @@ void main() {
         );
         setUpIOSProject(fileSystem);
         final FlutterProject flutterProject = FlutterProject.fromDirectory(fileSystem.currentDirectory);
-        final BuildableIOSApp buildableIOSApp = BuildableIOSApp(flutterProject.ios, 'flutter', 'My Super Awesome App.app');
+        final BuildableIOSLikeApp buildableIOSApp = BuildableIOSLikeApp(flutterProject.ios, 'flutter', 'My Super Awesome App.app');
 
         processManager.addCommand(FakeCommand(command: _xattrArgs(flutterProject)));
         processManager.addCommand(const FakeCommand(command: kRunReleaseArgs));
@@ -230,7 +230,7 @@ void main() {
       );
       setUpIOSProject(fileSystem);
       final FlutterProject flutterProject = FlutterProject.fromDirectory(fileSystem.currentDirectory);
-      final BuildableIOSApp buildableIOSApp = BuildableIOSApp(flutterProject.ios, 'flutter', 'My Super Awesome App.app');
+      final BuildableIOSLikeApp buildableIOSApp = BuildableIOSLikeApp(flutterProject.ios, 'flutter', 'My Super Awesome App.app');
 
       processManager.addCommand(FakeCommand(command: _xattrArgs(flutterProject)));
       // The first xcrun call should fail with a

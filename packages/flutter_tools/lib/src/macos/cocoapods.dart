@@ -394,7 +394,7 @@ class CocoaPods {
     //
     // Warn the user if they are still symlinking to the framework.
     final Link flutterSymlink = _fileSystem.link(_fileSystem.path.join(
-      (xcodeProject as IosProject).symlinks.path,
+      (xcodeProject as IosLikeProject).symlinks.path,
       'flutter',
     ));
     if (flutterSymlink.existsSync()) {

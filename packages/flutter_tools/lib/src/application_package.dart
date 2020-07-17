@@ -19,6 +19,7 @@ import 'build_info.dart';
 import 'fuchsia/application_package.dart';
 import 'globals.dart' as globals;
 import 'ios/plist_parser.dart';
+import 'ios/xcodeproj.dart';
 import 'linux/application_package.dart';
 import 'macos/application_package.dart';
 import 'project.dart';
