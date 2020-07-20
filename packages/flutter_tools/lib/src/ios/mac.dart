@@ -407,7 +407,7 @@ Future<XcodeBuildResult> buildXcodeProject({
   }
 
   if (buildResult.exitCode != 0) {
-    globals.printStatus('Failed to build iOS app');
+    globals.printStatus('Failed to build $xcodePlatform app');
     if (buildResult.stderr.isNotEmpty) {
       globals.printStatus('Error output from Xcode build:\n↳');
       globals.printStatus(buildResult.stderr, indent: 4);

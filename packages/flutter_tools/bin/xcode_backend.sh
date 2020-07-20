@@ -155,7 +155,9 @@ is set to release or run \"flutter build ios --release\", then re-run Archive fr
     performance_measurement_option="--performance-measurement-file=${PERFORMANCE_MEASUREMENT_FILE}"
   fi
 
-  # TODO lynn 2020 07
+  # [lynn] This happens to be "ios" or "tvos".
+  target_platform="${SWIFT_PLATFORM_TARGET_PREFIX}"
+
   RunCommand "${FLUTTER_ROOT}/bin/flutter"                                \
     ${verbose_flag}                                                       \
     ${flutter_engine_flag}                                                \
@@ -163,7 +165,7 @@ is set to release or run \"flutter build ios --release\", then re-run Archive fr
     assemble                                                              \
     --output="${derived_dir}/"                                            \
     ${performance_measurement_option}                                     \
-    -dTargetPlatform=ios                                                  \
+    -dTargetPlatform="${target_platform}"                                 \
     -dTargetFile="${target_path}"                                         \
     -dBuildMode=${build_mode}                                             \
     -dIosArchs="${ARCHS}"                                                 \
