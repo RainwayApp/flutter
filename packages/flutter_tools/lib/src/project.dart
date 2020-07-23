@@ -541,7 +541,8 @@ abstract class IosLikeProject extends FlutterProjectPlatform implements XcodeBas
     // if (productName == null) {
     //   globals.printTrace('FULL_PRODUCT_NAME not present, defaulting to $hostAppProjectName');
     // }
-    return productName ?? '$hostAppProjectName.app';
+    // return productName ?? '$hostAppProjectName.app';
+    return productName ?? '$runnerTargetName.app';
   }
 
   /// The build settings for the host app of this project, as a detached map.
