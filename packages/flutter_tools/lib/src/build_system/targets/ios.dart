@@ -57,7 +57,7 @@ abstract class AotAssemblyBase extends Target {
       ?.map(getIOSArchForName)
       ?.toList()
       ?? <DarwinArch>[DarwinArch.arm64];
-    if (targetPlatform != TargetPlatform.ios) {
+    if (targetPlatform != TargetPlatform.ios && targetPlatform != TargetPlatform.tvos) {
       throw Exception('aot_assembly is only supported for iOS applications.');
     }
     if (iosArchs.contains(DarwinArch.x86_64)) {

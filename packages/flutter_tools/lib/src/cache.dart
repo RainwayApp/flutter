@@ -121,6 +121,8 @@ class Cache {
       _artifacts.add(AndroidInternalBuildArtifacts(this));
 
       _artifacts.add(IOSEngineArtifacts(this));
+      // no, these are artifacts downloaded from https://storage.googleapis.com/, tvos doesn't exist there
+      // _artifacts.add(TvOSEngineArtifacts(this));
       _artifacts.add(FlutterWebSdk(this));
       _artifacts.add(FlutterSdk(this));
       _artifacts.add(WindowsEngineArtifacts(this, platform: _platform));
@@ -1103,34 +1105,34 @@ class IOSEngineArtifacts extends EngineCachedArtifact {
   }
 }
 
-class TvOSEngineArtifacts extends EngineCachedArtifact {
-  TvOSEngineArtifacts(Cache cache) : super(
-    'tvos-sdk',
-    cache,
-    DevelopmentArtifact.tvOS,
-  );
+// class TvOSEngineArtifacts extends EngineCachedArtifact {
+//   TvOSEngineArtifacts(Cache cache) : super(
+//     'tvos-sdk',
+//     cache,
+//     DevelopmentArtifact.tvOS,
+//   );
 
-  @override
-  List<List<String>> getBinaryDirs() {
-    return <List<String>>[
-      if (globals.platform.isMacOS || cache.includeAllPlatforms)
-        ..._tvosBinaryDirs,
-    ];
-  }
+//   @override
+//   List<List<String>> getBinaryDirs() {
+//     return <List<String>>[
+//       if (globals.platform.isMacOS || cache.includeAllPlatforms)
+//         ..._tvosBinaryDirs,
+//     ];
+//   }
 
-  @override
-  List<String> getLicenseDirs() {
-    if (cache.includeAllPlatforms || globals.platform.isMacOS) {
-      return const <String>['tvos', 'tvos-profile', 'tvos-release'];
-    }
-    return const <String>[];
-  }
+//   @override
+//   List<String> getLicenseDirs() {
+//     if (cache.includeAllPlatforms || globals.platform.isMacOS) {
+//       return const <String>['tvos', 'tvos-profile', 'tvos-release'];
+//     }
+//     return const <String>[];
+//   }
 
-  @override
-  List<String> getPackageDirs() {
-    return <String>[];
-  }
-}
+//   @override
+//   List<String> getPackageDirs() {
+//     return <String>[];
+//   }
+// }
 
 /// A cached artifact containing Gradle Wrapper scripts and binaries.
 ///
